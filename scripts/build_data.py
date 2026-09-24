@@ -107,7 +107,16 @@ def period_label(p):
     return f"{month}-{p[2:4]}"
 
 
-def read_sheet(ws, value_col_name):
+def read_sheet(ws, value_col_name, total_col, prov_start_col):
+    """Lee una hoja fila a fila. Las dos hojas fuente tienen distinta cantidad
+    de columnas antes del desglose por provincia:
+      SALDOS: A ACTIVIDAD, B PERIODO, C MONEDA, D TIPO DE CAMBIO, E TOTAL, F.. provincias
+      TASAS:  A ACTIVIDAD, B PERIODO, C MONEDA, D TOTAL,          E.. provincias
+    (TASAS no tiene columna de tipo de cambio, así que el total y el inicio del
+    desglose por provincia están un lugar más a la izquierda que en SALDOS).
+    total_col/prov_start_col hacen explícito ese corrimiento en vez de asumir
+    siempre la misma distancia de columnas.
+    """
     records = []
     for r in range(2, ws.max_row + 1):
         act = ws.cell(row=r, column=1).value
@@ -116,8 +125,8 @@ def read_sheet(ws, value_col_name):
         per = ws.cell(row=r, column=2).value
         mon = ws.cell(row=r, column=3).value
         val_or_tc = ws.cell(row=r, column=4).value
-        total = ws.cell(row=r, column=5).value
-        provs = {p: ws.cell(row=r, column=6 + i).value for i, p in enumerate(PROVINCIAS)}
+        total = ws.cell(row=r, column=total_col).value
+        provs = {p: ws.cell(row=r, column=prov_start_col + i).value for i, p in enumerate(PROVINCIAS)}
         records.append({'actividad': act, 'periodo': per, 'moneda': mon, value_col_name: val_or_tc,
                          'total': total, 'provincias': provs})
     return records
@@ -125,8 +134,8 @@ def read_sheet(ws, value_col_name):
 
 def build(xlsx_path, out_path):
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    saldos = read_sheet(wb['2025 - SALDOS'], 'tc')
-    tasas = read_sheet(wb['2025 - TASAS'], 'tasas_nac')
+    saldos = read_sheet(wb['2025 - SALDOS'], 'tc', total_col=5, prov_start_col=6)
+    tasas = read_sheet(wb['2025 - TASAS'], 'tasas_nac', total_col=4, prov_start_col=5)
 
     periodos = sorted({r['periodo'] for r in saldos})
     periodos_label = {p: period_label(p) for p in periodos}
