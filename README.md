@@ -33,8 +33,9 @@ dashboard muestre la serie completa combinada:
    BCRA, con **todas** las actividades económicas del país (no solo agro),
    en una jerarquía CIIU/CLANAE. El script identifica solo a las 12
    actividades agro **por coincidencia exacta de nombre**, así que se le
-   puede pasar el archivo bruto, sin filtrar antes a mano. Así se cargó el
-   año 2024 (`data/source/PRESTAMOS_AL_SECTOR_AGRO_2024_bcra_crudo.xls`).
+   puede pasar el archivo bruto, sin filtrar antes a mano. Así se cargaron
+   2023 y 2024 (`data/source/PRESTAMOS_AL_SECTOR_AGRO_2023_bcra_crudo.xls`
+   y `..._2024_bcra_crudo.xls`).
 
 En ambos formatos, cada fila es `ACTIVIDAD` × `PERIODO` (AAAAMMDD, cierre de
 trimestre) × `MONEDA`, con un total nacional y el desglose por las 24
@@ -84,6 +85,13 @@ validaciones falla, el script corta con un error en vez de guardar datos
 corridos de provincia (así se detectó, en la versión limpia de 2025, un
 bug real donde el desglose de `TASAS` por provincia venía corrido una
 columna).
+
+Otra cosa a tener en cuenta: el BCRA no siempre le pone el mismo nombre a
+CABA en el encabezado — en el export de 2024 dice "CABA" y en el de 2023
+dice "Capital Federal" (son la misma jurisdicción, `_validate_prov_columns`
+ya contempla ambos nombres como alias). Si en un export futuro aparece
+otra variante y la validación corta con error, agregar el alias nuevo a la
+lista `aliases` de esa función alcanza para resolverlo.
 
 ### Actividades con serie incompleta
 
