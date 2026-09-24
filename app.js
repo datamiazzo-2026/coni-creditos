@@ -25,14 +25,14 @@
 
   function getAct(id){ return DATA.actividades.find(a=>a.id===id); }
 
-  // ---------- Activity pills ----------
+  // ---------- Activity sidebar ----------
   function renderPills(container, onClick){
     container.innerHTML='';
     DATA.actividades.forEach(a=>{
       const b = document.createElement('button');
-      b.className = 'actpill' + (a.id===state.actId ? ' active':'');
+      b.className = 'sbrow' + (a.id===state.actId ? ' active':'');
       const limitada = !a.saldos_moneda_completo || !a.tasas_completo;
-      b.innerHTML = '<span class="ic">'+a.icono+'</span>' + a.nombre + (limitada ? '<span class="dot" title="Datos parciales: ver aviso en la vista"></span>' : '');
+      b.innerHTML = '<span>'+a.nombre+'</span>' + (limitada ? '<span class="dot" title="Datos parciales: ver aviso en la vista"></span>' : '');
       b.addEventListener('click', ()=>{ state.actId=a.id; onClick(); });
       container.appendChild(b);
     });
@@ -286,8 +286,7 @@
   }
 
   function syncPills(){
-    renderPills(document.getElementById('actPills'), pillClicked);
-    renderPills(document.getElementById('actPillsTasas'), pillClicked);
+    renderPills(document.getElementById('actSidebar'), pillClicked);
   }
   function pillClicked(){
     syncPills();

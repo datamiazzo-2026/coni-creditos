@@ -66,22 +66,36 @@
   }
   nav.tabs button.active{color:var(--tab-active); border-color:var(--tab-active);}
 
-  main{max-width:1180px; margin:0 auto; padding:18px 20px 60px;}
+  main{
+    max-width:1180px; margin:0 auto; padding:18px 20px 60px;
+    display:grid; grid-template-columns:212px 1fr; gap:24px; align-items:start;
+  }
+  .content{min-width:0;}
 
-  .pillrow{
-    display:flex; flex-wrap:wrap; row-gap:2px; column-gap:18px;
-    width:100%; padding:2px 0 10px; margin-bottom:16px; border-bottom:1px solid var(--border);
+  .sidebar{
+    border-right:1px solid var(--border); padding:2px 14px 2px 0;
+    position:sticky; top:14px;
   }
-  .actpill{
-    all:unset; cursor:pointer; display:flex; align-items:center; gap:5px;
-    padding:7px 1px; border-bottom:2px solid transparent;
-    color:var(--text-muted); font-size:12px; font-weight:600;
-    white-space:nowrap; position:relative;
+  .sbrow{
+    all:unset; display:flex; align-items:flex-start; gap:6px; width:100%; box-sizing:border-box;
+    cursor:pointer; padding:8px 10px 8px 12px; border-left:3px solid transparent;
+    color:var(--text-muted); font-size:12.5px; font-weight:600; line-height:1.35;
   }
-  .actpill .ic{font-size:12.5px;}
-  .actpill.active{color:var(--tab-active); border-color:var(--tab-active); font-weight:700;}
-  .actpill .dot{
-    width:5px; height:5px; border-radius:50%; background:var(--warn-text); opacity:.8; margin-left:1px;
+  .sbrow span:first-child{flex:1;}
+  .sbrow.active{background:var(--accent-soft); border-left-color:var(--tab-active); color:var(--tab-active); font-weight:700;}
+  .sbrow .dot{
+    width:5px; height:5px; border-radius:50%; background:var(--warn-text); opacity:.85; margin-top:5px; flex-shrink:0;
+  }
+
+  @media (max-width:760px){
+    main{grid-template-columns:1fr;}
+    .sidebar{
+      border-right:none; border-bottom:1px solid var(--border); position:static;
+      display:flex; flex-wrap:wrap; row-gap:2px; column-gap:16px; padding:2px 0 10px;
+    }
+    .sbrow{width:auto; padding:6px 1px; border-left:none; border-bottom:2px solid transparent;}
+    .sbrow.active{background:transparent; border-left:none; border-bottom-color:var(--tab-active);}
+    .sbrow .dot{margin-top:0;}
   }
 
   .toolbar{
