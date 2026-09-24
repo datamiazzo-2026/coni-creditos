@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CONINAGRO · Créditos al agro 2025</title>
+<meta name="description" content="Dashboard de saldos y tasas de crédito al sector agroindustrial y agropecuario, por actividad, moneda y provincia. Datos 2025.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark">🌱</div>
+    <div>
+      <h1>CONINAGRO · Créditos al agro</h1>
+      <div class="subtitle">Saldos y tasas del sistema financiero a las actividades agroindustriales y agropecuarias</div>
+    </div>
+  </div>
+  <div class="meta">Cobertura: <b>Mar-25 a Dic-25</b><br>Fuente: BCRA · elaboración propia</div>
+</header>
+
+<nav class="tabs" id="tabsNav">
+  <button data-tab="saldos" class="active">Saldos</button>
+  <button data-tab="tasas">Tasas</button>
+</nav>
+
+<main>
+
+  <div id="view-saldos">
+    <div class="pillrow" id="actPills"></div>
+
+    <div class="toolbar">
+      <div class="segmented" id="curSeg">
+        <button data-cur="total" class="active">Total (US$ equiv.)</button>
+        <button data-cur="pesos">Pesos ($)</button>
+        <button data-cur="dolares">Dólares (US$)</button>
+      </div>
+      <div class="tcnote" id="tcNote"></div>
+    </div>
+
+    <div id="partialNoteSaldos" class="partialnote" style="display:none;">
+      ⚠️ <div>Esta actividad solo tiene dato reportado para <b>Mar-25</b> y sin discriminar por moneda. No hay serie trimestral completa ni desglose pesos/dólares.</div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="panel">
+      <h2>Evolución trimestral del saldo</h2>
+      <div class="desc" id="chartDesc"></div>
+      <div class="legend" id="chartLegend"></div>
+      <div class="chartwrap"><canvas id="evolChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Saldo por provincia</h2>
+      <div class="desc" id="provDesc"></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+          <tbody id="provBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-tasas" style="display:none;">
+    <div class="pillrow" id="actPillsTasas"></div>
+
+    <div id="partialNoteTasas" class="partialnote" style="display:none;">
+      ⚠️ <div>Esta actividad solo tiene tasa reportada para <b>Mar-25</b>, únicamente en pesos.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tasa promedio nacional por trimestre</h2>
+      <div class="desc">Tasa nominal anual ponderada, pesos vs. dólares.</div>
+      <div class="legend" id="tasaLegend"></div>
+      <div class="chartwrap"><canvas id="tasaChart"></canvas></div>
+    </div>
+
+    <div class="twocol">
+      <div class="panel">
+        <h2>Tasas más altas por provincia</h2>
+        <div class="desc">Últimos datos disponibles, en pesos.</div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
+            <tbody id="tasaTopBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Tasas más bajas por provincia</h2>
+        <div class="desc">Últimos datos disponibles, en pesos.</div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
+            <tbody id="tasaBottomBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="note">Fuente: entidades financieras informantes al BCRA · elaboración CONINAGRO · datos 2025 (Mar–Dic)</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
