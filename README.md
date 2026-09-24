@@ -43,7 +43,17 @@ dólares al tipo de cambio de cada trimestre, útil para comparar entre
 trimestres sin el ruido de la devaluación.
 
 `TASAS` tiene la misma lógica pero sin moneda `0` (no existe un "total" de
-tasa): solo `1` (pesos) y `2` (dólares).
+tasa): solo `1` (pesos) y `2` (dólares). El valor de `TASAS` es la tasa
+nacional tal cual la reporta la fuente (columna `TOTAL`) — el dashboard no
+calcula ningún promedio ni ponderación propia, solo la muestra.
+
+**Ojo con las columnas al actualizar el Excel:** `SALDOS` tiene una columna
+`TIPO DE CAMBIO` entre `MONEDA` y `TOTAL` que `TASAS` no tiene, así que el
+desglose por provincia arranca en una columna distinta en cada hoja (`F` en
+`SALDOS`, `E` en `TASAS`). `scripts/build_data.py` ya contempla ese
+corrimiento (`total_col`/`prov_start_col` en `read_sheet`); si la fuente
+cambia de estructura hay que revisar esos dos parámetros, si no el
+desglose por provincia de tasas queda corrido de actividad.
 
 ### Actividades con serie incompleta
 
