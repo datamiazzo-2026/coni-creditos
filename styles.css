@@ -109,7 +109,6 @@
   }
   .segmented button.active{background:var(--accent); color:#fff;}
   .segmented button:disabled{opacity:.35; cursor:not-allowed;}
-  .tcnote{font-size:11.5px; color:var(--text-faint);}
 
   .partialnote{
     display:flex; gap:10px; align-items:flex-start; background:var(--warn-bg); color:var(--warn-text);
@@ -143,6 +142,9 @@
   .legend{display:flex; gap:16px; font-size:12px; color:var(--text-muted); margin-bottom:10px; flex-wrap:wrap;}
   .legend span{display:inline-flex; align-items:center; gap:6px;}
   .legend i{width:11px; height:11px; border-radius:3px; display:inline-block;}
+  .legend span.toggle{cursor:pointer; user-select:none; transition:opacity .15s;}
+  .legend span.toggle:hover{opacity:.7;}
+  .legend span.toggle.off{opacity:.4; text-decoration:line-through;}
 
   table{width:100%; border-collapse:collapse; font-size:13px;}
   thead th{

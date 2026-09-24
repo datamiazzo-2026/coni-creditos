@@ -6,7 +6,6 @@
   const PERIODOS = DATA.periodos;
   const PLABEL = DATA.periodos_label;
 
-  const fmtInt = new Intl.NumberFormat('es-AR', {maximumFractionDigits:0});
   const fmt1 = new Intl.NumberFormat('es-AR', {maximumFractionDigits:1, minimumFractionDigits:1});
   const fmtPct = new Intl.NumberFormat('es-AR', {maximumFractionDigits:1, minimumFractionDigits:1});
 
@@ -218,9 +217,6 @@
       segBtns.forEach(b=>b.classList.toggle('active', b.dataset.cur==='total'));
     }
 
-    const validTc = act.series.filter(s=>s);
-    document.getElementById('tcNote').textContent = 'TC usado: ' + validTc.map(s=>PLABEL[s.periodo]+' $'+fmtInt.format(s.tc)).join(' · ');
-
     renderTiles(act);
     renderChart(act);
     renderProvinceTable(act);
@@ -254,9 +250,19 @@
         }
       }
     });
-    document.getElementById('tasaLegend').innerHTML =
-      '<span><i style="background:'+accent+'"></i>Pesos</span>'
-      + '<span><i style="background:'+gold+'"></i>Dólares</span>';
+    const legendEl = document.getElementById('tasaLegend');
+    legendEl.innerHTML =
+      '<span class="toggle" data-idx="0"><i style="background:'+accent+'"></i>Pesos</span>'
+      + '<span class="toggle" data-idx="1"><i style="background:'+gold+'"></i>Dólares</span>';
+    legendEl.querySelectorAll('.toggle').forEach(function(el){
+      el.onclick = function(){
+        const idx = Number(el.dataset.idx);
+        const visible = tasaChart.isDatasetVisible(idx);
+        tasaChart.setDatasetVisibility(idx, !visible);
+        tasaChart.update();
+        el.classList.toggle('off', visible);
+      };
+    });
   }
 
   function renderTasaTables(act){
