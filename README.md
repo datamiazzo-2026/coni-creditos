@@ -52,7 +52,8 @@ y discriminados por moneda. Las otras 4 (granja y otros animales,
 procesamiento de carnes y alimentos, elaboración de lácteos, molinería y
 alimento balanceado) tienen el saldo **total** (moneda 0) para los 4
 trimestres, pero nunca se reportó el desglose por moneda (pesos/dólares,
-moneda 1 y 2) para ellas, y en `TASAS` solo tienen dato de Mar-25.
+moneda 1 y 2) para ellas; en `TASAS` tienen los 4 trimestres pero
+únicamente en pesos (falta el dato en dólares).
 
 El dashboard trata estos tres niveles de completitud por separado (campos
 `saldos_total_completo`, `saldos_moneda_completo` y `tasas_completo` en el
