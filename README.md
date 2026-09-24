@@ -50,11 +50,18 @@ tasa): solo `1` (pesos) y `2` (dólares).
 Al cierre de 2025, 8 de las 12 actividades tienen los 4 trimestres completos
 y discriminados por moneda. Las otras 4 (granja y otros animales,
 procesamiento de carnes y alimentos, elaboración de lácteos, molinería y
-alimento balanceado) solo tienen dato del primer trimestre (Mar-25) y sin
-discriminar por moneda. El dashboard lo detecta automáticamente
-(`completa: false` en el JSON) y lo avisa en la interfaz en vez de simular
-datos que no existen. Si en un trimestre futuro esas actividades se
-completan, `scripts/build_data.py` las toma solas sin tocar código.
+alimento balanceado) tienen el saldo **total** (moneda 0) para los 4
+trimestres, pero nunca se reportó el desglose por moneda (pesos/dólares,
+moneda 1 y 2) para ellas, y en `TASAS` solo tienen dato de Mar-25.
+
+El dashboard trata estos tres niveles de completitud por separado (campos
+`saldos_total_completo`, `saldos_moneda_completo` y `tasas_completo` en el
+JSON), en vez de un único flag: para estas 4 actividades muestra igual el
+gráfico, las tiles y la tabla de provincia en la vista **Total (US$
+equiv.)** con los 4 trimestres, pero deshabilita las vistas Pesos/Dólares
+(avisándolo) y muestra el aviso de dato parcial en la pestaña Tasas. Si en
+el futuro aparece el desglose por moneda o más trimestres de tasa,
+`scripts/build_data.py` los toma solos sin tocar código.
 
 ## Actualizar con un trimestre nuevo
 

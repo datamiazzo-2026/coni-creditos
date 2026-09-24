@@ -31,7 +31,8 @@
     DATA.actividades.forEach(a=>{
       const b = document.createElement('button');
       b.className = 'actpill' + (a.id===state.actId ? ' active':'');
-      b.innerHTML = '<span class="ic">'+a.icono+'</span>' + a.nombre + (!a.completa ? '<span class="dot" title="Solo Mar-25"></span>' : '');
+      const limitada = !a.saldos_moneda_completo || !a.tasas_completo;
+      b.innerHTML = '<span class="ic">'+a.icono+'</span>' + a.nombre + (limitada ? '<span class="dot" title="Datos parciales: ver aviso en la vista"></span>' : '');
       b.addEventListener('click', ()=>{ state.actId=a.id; onClick(); });
       container.appendChild(b);
     });
@@ -105,7 +106,7 @@
     const nTrim = series.filter(s=>s).length;
     tileCobertura.innerHTML = '<div class="label">Cobertura de datos</div>'
       + '<div class="value mono">'+nTrim+' / 4</div>'
-      + '<div class="unit">'+(act.completa ? 'trimestres con dato' : 'solo Mar-25 disponible')+'</div>';
+      + '<div class="unit">'+(act.saldos_total_completo ? 'trimestres con dato' : 'trimestres con saldo total')+'</div>';
     wrap.appendChild(tileCobertura);
   }
 
@@ -181,14 +182,25 @@
 
   function renderSaldosView(){
     const act = getAct(state.actId);
-    document.getElementById('partialNoteSaldos').style.display = act.completa ? 'none' : 'flex';
+    const noteEl = document.getElementById('partialNoteSaldos');
+    const noteText = document.getElementById('partialNoteSaldosText');
+    if(!act.saldos_total_completo){
+      const lastLbl = act.ultimo_periodo ? PLABEL[act.ultimo_periodo] : '—';
+      noteText.innerHTML = 'Esta actividad solo tiene saldo total reportado hasta <b>'+lastLbl+'</b>. No hay serie trimestral completa.';
+      noteEl.style.display = 'flex';
+    } else if(!act.saldos_moneda_completo){
+      noteText.innerHTML = 'El saldo <b>total</b> está completo para los 4 trimestres, pero esta actividad no tiene desglose por moneda (pesos/dólares) reportado.';
+      noteEl.style.display = 'flex';
+    } else {
+      noteEl.style.display = 'none';
+    }
 
     const segBtns = document.getElementById('curSeg').querySelectorAll('button');
     segBtns.forEach(b=>{
       const c = b.dataset.cur;
-      b.disabled = !act.completa && c!=='total';
+      b.disabled = !act.saldos_moneda_completo && c!=='total';
     });
-    if(!act.completa && state.cur!=='total'){
+    if(!act.saldos_moneda_completo && state.cur!=='total'){
       state.cur = 'total';
       segBtns.forEach(b=>b.classList.toggle('active', b.dataset.cur==='total'));
     }
@@ -256,7 +268,19 @@
 
   function renderTasasView(){
     const act = getAct(state.actId);
-    document.getElementById('partialNoteTasas').style.display = act.completa ? 'none' : 'flex';
+    const noteEl = document.getElementById('partialNoteTasas');
+    const noteText = document.getElementById('partialNoteTasasText');
+    if(!act.tasas_completo){
+      const withData = act.tasas.filter(t=> t.pesos!==null || t.dolares!==null);
+      const lastT = withData[withData.length-1];
+      const soloPesos = withData.every(t=> t.dolares===null);
+      noteText.innerHTML = lastT
+        ? 'Esta actividad solo tiene tasa reportada hasta <b>'+PLABEL[lastT.periodo]+'</b>'+(soloPesos ? ', únicamente en pesos.' : '.')
+        : 'Esta actividad no tiene tasa reportada.';
+      noteEl.style.display = 'flex';
+    } else {
+      noteEl.style.display = 'none';
+    }
     renderTasaChart(act);
     renderTasaTables(act);
   }
