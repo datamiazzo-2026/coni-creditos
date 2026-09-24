@@ -32,10 +32,11 @@
   }
 
   *{box-sizing:border-box;}
+  html{overflow-x:hidden;}
   body{
     background:var(--bg); color:var(--text);
     font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    padding-inline:0; margin:0;
+    padding-inline:0; margin:0; overflow-x:hidden; width:100%;
   }
   .mono{font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric: tabular-nums;}
 
@@ -67,14 +68,13 @@
   nav.tabs button.active{color:var(--tab-active); border-color:var(--tab-active);}
 
   main{
-    max-width:1180px; margin:0 auto; padding:18px 20px 60px;
-    display:grid; grid-template-columns:212px 1fr; gap:24px; align-items:start;
+    max-width:1180px; margin:0 auto; padding:18px 20px 60px; width:100%;
+    display:grid; grid-template-columns:212px minmax(0,1fr); gap:24px; align-items:start;
   }
   .content{min-width:0;}
 
   .sidebar{
     border-right:1px solid var(--border); padding:2px 14px 2px 0;
-    position:sticky; top:14px;
   }
   .sbrow{
     all:unset; display:flex; align-items:flex-start; gap:6px; width:100%; box-sizing:border-box;
