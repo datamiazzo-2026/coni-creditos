@@ -14,22 +14,8 @@
     --shadow:0 1px 2px rgba(16,36,28,.06), 0 1px 1px rgba(16,36,28,.04);
     color-scheme: light;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --header:#08211A; --header-text:#EAF3EE; --header-sub:#8FB6A2;
-      --accent:#3FAE6C; --accent-strong:#2E8353; --accent-soft:#123526;
-      --gold:#D7A548; --gold-soft:#3A2C13;
-      --bg:#0B1512; --surface:#0F1C17; --surface-2:#13221C;
-      --text:#E7F0EB; --text-muted:#9BB1A7; --text-faint:#6E8378;
-      --border:#213631; --border-strong:#2B423B;
-      --bar-muted:#33513F; --bar-highlight:#3FAE6C; --bar-track:#16231D;
-      --good-bg:#12301F; --good-text:#6FE3A0;
-      --bad-bg:#3A1B12; --bad-text:#FF9A76;
-      --warn-bg:#3A2C13; --warn-text:#E7BE6D;
-      --tab-active:#3FAE6C;
-      color-scheme: dark;
-    }
-  }
+  /* Tema siempre claro, igual al formato de monitordegranos.com.ar (no seguimos
+     el modo oscuro del sistema operativo: el fondo oscuro se veía verdoso). */
   :root[data-theme="dark"]{
     --header:#08211A; --header-text:#EAF3EE; --header-sub:#8FB6A2;
     --accent:#3FAE6C; --accent-strong:#2E8353; --accent-soft:#123526;
@@ -82,18 +68,20 @@
 
   main{max-width:1180px; margin:0 auto; padding:18px 20px 60px;}
 
-  .pillrow{display:flex; gap:20px; overflow-x:auto; padding-bottom:0; margin-bottom:18px; border-bottom:1px solid var(--border);}
-  .pillrow::-webkit-scrollbar{height:6px;}
-  .actpill{
-    all:unset; cursor:pointer; display:flex; align-items:center; gap:6px;
-    padding:10px 1px; border-bottom:2px solid transparent;
-    color:var(--text-muted); font-size:13.5px; font-weight:600;
-    white-space:nowrap; flex-shrink:0; position:relative;
+  .pillrow{
+    display:flex; flex-wrap:wrap; row-gap:2px; column-gap:18px;
+    width:100%; padding:2px 0 10px; margin-bottom:16px; border-bottom:1px solid var(--border);
   }
-  .actpill .ic{font-size:14px;}
+  .actpill{
+    all:unset; cursor:pointer; display:flex; align-items:center; gap:5px;
+    padding:7px 1px; border-bottom:2px solid transparent;
+    color:var(--text-muted); font-size:12px; font-weight:600;
+    white-space:nowrap; position:relative;
+  }
+  .actpill .ic{font-size:12.5px;}
   .actpill.active{color:var(--tab-active); border-color:var(--tab-active); font-weight:700;}
   .actpill .dot{
-    width:6px; height:6px; border-radius:50%; background:var(--warn-text); opacity:.8; margin-left:2px;
+    width:5px; height:5px; border-radius:50%; background:var(--warn-text); opacity:.8; margin-left:1px;
   }
 
   .toolbar{
