@@ -22,6 +22,17 @@ Si en un trimestre nuevo aparece alguna actividad que hoy está en la lista
 de "parciales" (PARTIAL_ACTS) con series completas, simplemente pasa a
 completarse sola: el script arma la serie con lo que encuentre fila a fila,
 no hace falta tocar las listas de actividades.
+
+Cada actividad puede estar "completa" en distintos sentidos, y el dashboard
+los trata por separado:
+    saldos_total_completo  -> hay TOTAL (moneda 0) para los 4 trimestres
+    saldos_moneda_completo -> hay PESOS y DÓLARES (moneda 1 y 2) para los
+                               4 trimestres (si esto falta pero el total
+                               está completo, el dashboard muestra igual
+                               la vista Total y solo deshabilita Pesos/
+                               Dólares)
+    tasas_completo          -> hay tasa en pesos y en dólares para los 4
+                               trimestres
 """
 import json
 import re
@@ -146,8 +157,9 @@ def build(xlsx_path, out_path):
                             'dolares_usd': dolares_usd, 'total_usd': total_usd})
 
         n_completos = sum(1 for s in series if s)
-        completa = n_completos == len(periodos) and all(
-            idx.get((act, p, 1)) and idx.get((act, p, 2)) for p in periodos if idx.get((act, p, 0))
+        saldos_total_completo = n_completos == len(periodos)
+        saldos_moneda_completo = saldos_total_completo and all(
+            idx.get((act, p, 1)) and idx.get((act, p, 2)) for p in periodos
         )
 
         last_per = next((p for p in reversed(periodos) if idx.get((act, p, 0))), None)
@@ -168,14 +180,20 @@ def build(xlsx_path, out_path):
             t1, t2 = idx_tasas.get((act, per, 1)), idx_tasas.get((act, per, 2))
             tasas_series.append({'periodo': per, 'pesos': t1['tasas_nac'] if t1 else None,
                                   'dolares': t2['tasas_nac'] if t2 else None})
-        t1l, t2l = idx_tasas.get((act, last_per, 1)), idx_tasas.get((act, last_per, 2))
+        tasas_completo = all(
+            idx_tasas.get((act, p, 1)) and idx_tasas.get((act, p, 2)) for p in periodos
+        )
+        last_per_tasas = next((p for p in reversed(periodos) if idx_tasas.get((act, p, 1)) or idx_tasas.get((act, p, 2))), last_per)
+        t1l, t2l = idx_tasas.get((act, last_per_tasas, 1)), idx_tasas.get((act, last_per_tasas, 2))
 
         out_acts.append({
             'id': slugify(act),
             'nombre': SHORT_NAMES.get(act, act),
             'nombre_completo': act,
             'icono': ICONS.get(act, '🌱'),
-            'completa': completa,
+            'saldos_total_completo': saldos_total_completo,
+            'saldos_moneda_completo': saldos_moneda_completo,
+            'tasas_completo': tasas_completo,
             'series': series,
             'provincias': {'total_ars': provs_total_ars, 'pesos_ars': provs_pesos_ars,
                             'dolares_usd': provs_dolares_usd, 'total_usd': provs_total_usd},
