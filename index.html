@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CONINAGRO · Créditos al agro 2025</title>
-<meta name="description" content="Dashboard de saldos y tasas de crédito al sector agroindustrial y agropecuario, por actividad, moneda y provincia. Datos 2025.">
+<title>CONINAGRO · Créditos al agro</title>
+<meta name="description" content="Dashboard de saldos y tasas de crédito al sector agroindustrial y agropecuario, por actividad, moneda y provincia. Serie histórica trimestral.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
       <div class="subtitle">Saldos y tasas del sistema financiero a las actividades agroindustriales y agropecuarias</div>
     </div>
   </div>
-  <div class="meta">Cobertura: <b>Mar-25 a Dic-25</b><br>Fuente: BCRA · elaboración propia</div>
+  <div class="meta">Cobertura: <b id="coverageLabel">—</b><br>Fuente: BCRA · elaboración propia</div>
 </header>
 
 <nav class="tabs" id="tabsNav">
@@ -108,7 +108,7 @@
 
 </main>
 
-<footer class="note">Fuente: entidades financieras informantes al BCRA · elaboración CONINAGRO · datos 2025 (Mar–Dic)</footer>
+<footer class="note">Fuente: entidades financieras informantes al BCRA · elaboración CONINAGRO · datos <span id="footerCoverage">—</span></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="app.js"></script>

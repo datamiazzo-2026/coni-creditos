@@ -23,6 +23,18 @@
 
   const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total' };
 
+  // Cobertura de datos (encabezado y pie), calculada de PERIODOS en vez de
+  // quedar hardcodeada: así no hay que tocar el HTML cada vez que se suma
+  // un año nuevo.
+  (function setCoverageLabels(){
+    const first = PLABEL[PERIODOS[0]], last = PLABEL[PERIODOS[PERIODOS.length-1]];
+    const rango = first+' a '+last;
+    const coverageEl = document.getElementById('coverageLabel');
+    if(coverageEl) coverageEl.textContent = rango;
+    const footerEl = document.getElementById('footerCoverage');
+    if(footerEl) footerEl.textContent = rango;
+  })();
+
   function getAct(id){ return DATA.actividades.find(a=>a.id===id); }
 
   // ---------- Activity sidebar ----------
@@ -105,7 +117,7 @@
     tileCobertura.className='tile';
     const nTrim = series.filter(s=>s).length;
     tileCobertura.innerHTML = '<div class="label">Cobertura de datos</div>'
-      + '<div class="value mono">'+nTrim+' / 4</div>'
+      + '<div class="value mono">'+nTrim+' / '+PERIODOS.length+'</div>'
       + '<div class="unit">'+(act.saldos_total_completo ? 'trimestres con dato' : 'trimestres con saldo total')+'</div>';
     wrap.appendChild(tileCobertura);
   }
@@ -146,7 +158,8 @@
       }
     });
 
-    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b> por trimestre de 2025. La última barra marca el corte más reciente disponible.';
+    const rangoLbl = PLABEL[PERIODOS[0]]+' a '+PLABEL[PERIODOS[PERIODOS.length-1]];
+    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b> por trimestre, '+rangoLbl+'. La última barra marca el corte más reciente disponible.';
     document.getElementById('chartLegend').innerHTML =
       '<span><i style="background:'+muted+'"></i>trimestre anterior</span>'
       + '<span><i style="background:'+hi+'"></i>último dato</span>';
@@ -189,7 +202,7 @@
       noteText.innerHTML = 'Esta actividad solo tiene saldo total reportado hasta <b>'+lastLbl+'</b>. No hay serie trimestral completa.';
       noteEl.style.display = 'flex';
     } else if(!act.saldos_moneda_completo){
-      noteText.innerHTML = 'El saldo <b>total</b> está completo para los 4 trimestres, pero esta actividad no tiene desglose por moneda (pesos/dólares) reportado.';
+      noteText.innerHTML = 'El saldo <b>total</b> está completo para los '+PERIODOS.length+' trimestres, pero esta actividad no tiene desglose por moneda (pesos/dólares) reportado.';
       noteEl.style.display = 'flex';
     } else {
       noteEl.style.display = 'none';
