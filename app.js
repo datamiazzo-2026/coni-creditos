@@ -1,6 +1,9 @@
 (function(){
   async function boot(){
-    const DATA = await fetch('data/dashboard_data.json').then(r=>r.json());
+    const [DATA, AR_MAP] = await Promise.all([
+      fetch('data/dashboard_data.json').then(r=>r.json()),
+      fetch('data/ar_map.json').then(r=>r.json())
+    ]);
 
   
   const PERIODOS = DATA.periodos;
@@ -31,6 +34,9 @@
   }
 
   const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', rangeStart:0, rangeEnd: PERIODOS.length-1 };
+
+  const provTooltipEl = document.getElementById('provTooltip');
+  const provMapWrapEl = document.getElementById('provMap');
 
   // ---------- Slider de ventana de tiempo (compartido entre pestañas) ----------
   const rangeMin = document.getElementById('rangeMin');
@@ -245,32 +251,118 @@
       + '<span><i style="background:'+hi+'"></i>último dato</span>';
   }
 
+  // Escala de color del mapa: blanco/gris muy claro (poco crédito) a un verde
+  // casi negro (mucho crédito). Usa raíz cuadrada en vez de escala lineal
+  // porque BS AS/Córdoba/Santa Fe/CABA concentran una porción enorme del
+  // total -- con escala lineal el resto de las provincias se verían todas
+  // casi blancas y no se distinguirían entre sí.
+  function provColorScale(t){
+    t = Math.max(0, Math.min(1, t));
+    const lightness = 93 - t*85;   // 93% (casi blanco) -> 8% (casi negro)
+    const saturation = 8 + t*30;   // un poco de verde institucional, más marcado cuanto más oscuro
+    return 'hsl(150 '+saturation.toFixed(0)+'% '+lightness.toFixed(0)+'%)';
+  }
+
+  function showProvTooltip(name, val, pct, prefix, evt){
+    if(!provTooltipEl) return;
+    provTooltipEl.innerHTML = '<b>'+name+'</b><br>'
+      + (val!=null ? fmtMillones(val, prefix)+(pct!=null?' · '+fmtPct.format(pct)+'% del total':'') : 'sin desglose disponible');
+    provTooltipEl.style.display = 'block';
+    moveProvTooltip(evt);
+  }
+  function moveProvTooltip(evt){
+    if(!provTooltipEl || !evt) return;
+    const pad = 14;
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    const rect = provTooltipEl.getBoundingClientRect();
+    if(x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
+    if(y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
+    provTooltipEl.style.left = x+'px';
+    provTooltipEl.style.top = y+'px';
+  }
+  function hideProvTooltip(){
+    if(provTooltipEl) provTooltipEl.style.display = 'none';
+  }
+  function setProvHover(name){
+    if(provMapWrapEl) provMapWrapEl.querySelectorAll('[data-prov]').forEach(function(el){
+      el.classList.toggle('prov-hover', name!==null && el.dataset.prov===name);
+    });
+    const body = document.getElementById('provBody');
+    if(body) body.querySelectorAll('tr[data-prov]').forEach(function(tr){
+      tr.classList.toggle('prov-hover', name!==null && tr.dataset.prov===name);
+    });
+  }
+
   function renderProvinceTable(act){
     const meta = currencyMeta(state.cur);
     const provs = (act.provincias && act.provincias[meta.provField]) || {};
     const entries = Object.entries(provs).filter(([,v])=> v!==null && v!==undefined);
     entries.sort((a,b)=> b[1]-a[1]);
     const total = entries.reduce((s,[,v])=>s+v,0);
-    const top = entries.slice(0,10);
-    const max = top.length ? top[0][1] : 1;
+    const max = entries.length ? entries[0][1] : 1;
+    const sqrtMax = Math.sqrt(max || 1);
 
+    // -------- Mapa --------
+    const mapEl = document.getElementById('provMap');
+    const valByProv = Object.fromEntries(entries);
+    if(!mapEl.dataset.built){
+      const svgParts = ['<svg viewBox="'+AR_MAP.viewBox+'" preserveAspectRatio="xMidYMid meet">'];
+      Object.keys(AR_MAP.paths).forEach(function(name){
+        svgParts.push('<path data-prov="'+name+'" d="'+AR_MAP.paths[name]+'" />');
+      });
+      svgParts.push('<circle data-prov="CABA" cx="'+AR_MAP.caba.x+'" cy="'+AR_MAP.caba.y+'" r="4.2" />');
+      svgParts.push('</svg>');
+      mapEl.innerHTML = svgParts.join('');
+      mapEl.dataset.built = '1';
+      mapEl.querySelectorAll('[data-prov]').forEach(function(el){
+        el.addEventListener('mouseenter', function(evt){
+          const name = el.dataset.prov;
+          setProvHover(name);
+          showProvTooltip(name, valByProv[name], valByProv[name]!=null && total ? valByProv[name]/total*100 : null, currencyMeta(state.cur).prefix, evt);
+        });
+        el.addEventListener('mousemove', moveProvTooltip);
+        el.addEventListener('mouseleave', function(){ setProvHover(null); hideProvTooltip(); });
+      });
+    }
+    mapEl.querySelectorAll('[data-prov]').forEach(function(el){
+      const name = el.dataset.prov;
+      const val = valByProv[name];
+      el.setAttribute('fill', val!=null ? provColorScale(Math.sqrt(val)/(sqrtMax||1)) : 'var(--bar-track)');
+      el.classList.toggle('prov-nodata', val==null);
+    });
+
+    const legendEl = document.getElementById('provLegend');
+    if(legendEl){
+      legendEl.innerHTML = '<span class="provlegend-label">'+meta.prefix+' 0</span>'
+        + '<span class="provlegend-bar"></span>'
+        + '<span class="provlegend-label">'+(entries.length?fmtMillones(max, meta.prefix):'—')+'</span>';
+    }
+
+    // -------- Listado completo (24 jurisdicciones) --------
     const body = document.getElementById('provBody');
     body.innerHTML='';
-    if(!top.length){
+    if(!entries.length){
       body.innerHTML = '<tr><td colspan="4" style="color:var(--text-faint); padding:16px 10px;">No hay desglose por provincia para esta vista de moneda.</td></tr>';
     } else {
-      top.forEach(([name,val], i)=>{
+      entries.forEach(([name,val], i)=>{
         const tr = document.createElement('tr');
+        tr.dataset.prov = name;
         const pct = total ? (val/total*100) : 0;
         const w = max ? (val/max*100) : 0;
         tr.innerHTML = '<td><span class="rank">'+(i+1)+'</span></td>'
           + '<td class="prov">'+name+'</td>'
           + '<td class="num mono">'+fmtMillones(val, meta.prefix)+'<div class="barcell"><i style="width:'+w.toFixed(1)+'%"></i></div></td>'
           + '<td class="num sharecol mono">'+fmtPct.format(pct)+'%</td>';
+        tr.addEventListener('mouseenter', function(evt){
+          setProvHover(name);
+          showProvTooltip(name, val, pct, meta.prefix, evt);
+        });
+        tr.addEventListener('mousemove', moveProvTooltip);
+        tr.addEventListener('mouseleave', function(){ setProvHover(null); hideProvTooltip(); });
         body.appendChild(tr);
       });
     }
-    document.getElementById('provDesc').innerHTML = 'Ranking de provincias por saldo <b>'+meta.label+'</b> al último dato disponible ('+PLABEL[act.ultimo_periodo]+').';
+    document.getElementById('provDesc').innerHTML = 'Saldo por provincia <b>'+meta.label+'</b> al último dato disponible ('+PLABEL[act.ultimo_periodo]+'). Cuanto más oscura la provincia en el mapa, mayor su saldo.';
   }
 
   function renderSaldosView(){

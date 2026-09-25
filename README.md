@@ -206,14 +206,63 @@ que ya usa el resto del script.
 
 ## Slider de ventana de tiempo
 
-El control "Ventana de tiempo", arriba de cada pestaña, filtra qué
-trimestres se ven en todos los gráficos (Saldos, Tasas y Resumen) sin
-alterar los datos ni la tabla de provincias, que siguen mostrando siempre
-el último dato disponible. También cambia la referencia de la tile
-"Variación del período" (compara el extremo izquierdo del slider contra el
-derecho, no siempre Mar-15 contra el último dato) y, en la pestaña Resumen,
-el trimestre de referencia del gráfico de diferencial. Es 100% client-side
-(`app.js`), no requiere tocar el JSON.
+El control "Ventana de tiempo", debajo del gráfico principal de cada
+pestaña, filtra qué trimestres se ven en todos los gráficos (Saldos, Tasas
+y Resumen) sin alterar los datos ni la tabla de provincias, que sigue
+mostrando siempre el último dato disponible. También recalcula, en vivo:
+la tile "Variación del período" (compara el extremo izquierdo del slider
+contra el derecho, no siempre Mar-15 contra el último dato), la tile "Mix
+por moneda" (promedio ponderado por saldo de todos los trimestres
+visibles, no solo el último) y, en la pestaña Resumen, las tres tiles de
+tasa/costo efectivo y el trimestre de referencia del gráfico de
+diferencial (todos usan el extremo derecho de la ventana elegida). Es
+100% client-side (`app.js`), no requiere tocar el JSON. Un mismo
+`<div class="rangepanel">` se reubica entre pestañas con
+`moveRangeSlider()` (`appendChild` a `#rangeSlot-<tab>`) en vez de
+duplicarse.
+
+## Mapa de saldo por provincia
+
+El panel "Saldo por provincia" (pestaña Saldos) combina un mapa de
+Argentina coroplético con el ranking de las 24 jurisdicciones, lado a
+lado. Cuanto más oscura una provincia, mayor su saldo en la actividad y
+moneda elegidas (segmented "Total/Pesos/Dólares" arriba). Pasar el mouse
+por una provincia del mapa -- o por una fila del listado -- muestra un
+tooltip con el monto y el % del total, y resalta la contraparte (fila ↔
+provincia) para ubicarla fácil.
+
+- **`data/ar_map.json`**: geometría del mapa ya proyectada y lista para
+  SVG -- `{ viewBox, paths: { "<nombre de provincia>": "<d de un
+  <path>>" }, caba: {x, y} }`. Las 23 provincias vienen de
+  [alvarezgarcia/provincias-argentinas-geojson](https://github.com/alvarezgarcia/provincias-argentinas-geojson)
+  (GeoJSON público, uno por provincia); CABA no viene en ese repo por ser
+  minúscula a esta escala, así que se dibuja como un círculo en su
+  centroide (fuente: API de Georef del Ministerio del Interior). Las
+  claves de `paths` son exactamente los nombres que ya usa
+  `act.provincias` en `dashboard_data.json` (`"BS AS"`, `"CABA"`,
+  `"Santiago del estero"`, `"Tierra del fuego"`, etc.), así no hace falta
+  ningún diccionario de traducción en el frontend.
+- Cómo se generó: se bajó el GeoJSON de cada provincia, se proyectaron
+  lon/lat con una proyección equirrectangular simple (x = lon·cos(lat₀),
+  y = -lat, con lat₀ el promedio de latitud del país) y se simplificó
+  cada polígono con Ramer-Douglas-Peucker para que el archivo pese poco
+  (~68 KB para las 23 provincias). El script no quedó en el repo porque
+  es un paso único (el mapa de Argentina no cambia); si hay que
+  regenerarlo o ajustar la simplificación, hay que volver a bajar los 23
+  GeoJSON de ese repo.
+- **Escala de color** (`provColorScale()` en `app.js`): en vez de una
+  escala lineal, usa la raíz cuadrada del saldo relativo al máximo *de la
+  vista actual* (misma actividad y moneda). Con escala lineal, como BS
+  AS/Córdoba/Santa Fe/CABA concentran la mayoría del crédito en casi
+  todas las actividades, el resto de las provincias se verían todas casi
+  blancas y no se distinguirían entre sí; con raíz cuadrada se nota mejor
+  el escalón entre provincias medianas y chicas. El máximo se recalcula
+  para cada actividad/moneda, así que el mapa siempre usa todo el rango
+  de contraste disponible (p. ej. en Tabaco, Jujuy y Salta salen bien
+  oscuras aunque su saldo sea mucho menor al de BS AS en Total).
+- Las provincias sin dato para la moneda elegida se pintan de un gris
+  clarito fijo (`.prov-nodata`), no de blanco, para diferenciar "sin
+  desglose" de "saldo muy bajo".
 
 ## Formato de montos chicos
 

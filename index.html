@@ -75,12 +75,19 @@
     <div class="panel">
       <h2>Saldo por provincia</h2>
       <div class="desc" id="provDesc"></div>
-      <div class="tablewrap">
-        <table>
-          <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
-          <tbody id="provBody"></tbody>
-        </table>
+      <div class="provgrid">
+        <div class="provmapwrap">
+          <div class="provmap" id="provMap"></div>
+          <div class="provlegend" id="provLegend"></div>
+        </div>
+        <div class="tablewrap provlistwrap">
+          <table>
+            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+            <tbody id="provBody"></tbody>
+          </table>
+        </div>
       </div>
+      <div class="provtooltip" id="provTooltip" style="display:none;"></div>
     </div>
   </div>
 
