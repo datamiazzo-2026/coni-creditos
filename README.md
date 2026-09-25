@@ -263,6 +263,34 @@ provincia) para ubicarla fácil.
 - Las provincias sin dato para la moneda elegida se pintan de un gris
   clarito fijo (`.prov-nodata`), no de blanco, para diferenciar "sin
   desglose" de "saldo muy bajo".
+- **Reutilizado en la pestaña Tasas** (panel "Tasa por provincia"): mismo
+  esquema de mapa + ranking completo de las 24 jurisdicciones, coloreado
+  por tasa en pesos en vez de saldo. Reemplazó a las dos tablas viejas
+  ("Tasas más altas/bajas por provincia", top 5 cada una). En `app.js`,
+  `makeProvincePanel(mapElId, tooltipElId, bodyElId)` factoriza el manejo
+  de tooltip/hover (antes atado a los ids fijos `provMap`/`provTooltip`/
+  `provBody`) para que Saldos y Tasas puedan tener cada uno su propia
+  instancia (`provPanelSaldos`, `provPanelTasas`) sin duplicar código; el
+  armado del SVG y el color siguen en cada `render*` porque difieren
+  bastante (moneda + `sqrt` vs. tasa + escala lineal, ver abajo).
+  - **Escala de color distinta**: a diferencia del saldo (unas pocas
+    provincias concentran casi todo el crédito → raíz cuadrada desde 0),
+    la tasa de interés no tiene esa concentración -- ninguna provincia
+    tiene "casi toda la tasa". Por eso el mapa de tasas normaliza
+    linealmente entre el mínimo y el máximo *de las provincias con dato
+    en esa actividad*, no entre 0 y el máximo: así aprovecha todo el
+    degradé en vez de que todo el mapa salga oscuro (si usara 0 como
+    piso, con tasas típicamente entre 30% y 90%, casi todas las
+    provincias caerían muy cerca del extremo oscuro).
+  - **Aviso sobre los 0,0%**: en `tasas_provincias.pesos`, una provincia
+    sin operaciones reportadas para esa actividad viene como `0.0`, no
+    como `null` (mismo criterio que ya usaba `tasas_provincias.dolares`).
+    El mapa y el listado los muestran como una tasa real de 0,0% -- es el
+    mismo comportamiento que ya tenían las tablas viejas de "más bajas
+    por provincia" (podían mostrar estos mismos ceros), solo que ahora se
+    ven los 24 en vez de 6 y quedan más a la vista. Si en algún momento se
+    quiere distinguir "0% real" de "sin operaciones", habría que sumar un
+    campo aparte en `build_data.py` (hoy la fuente BCRA no lo distingue).
 
 ## Formato de montos chicos
 

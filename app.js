@@ -35,8 +35,43 @@
 
   const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', rangeStart:0, rangeEnd: PERIODOS.length-1 };
 
-  const provTooltipEl = document.getElementById('provTooltip');
-  const provMapWrapEl = document.getElementById('provMap');
+  // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
+  // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
+  // y hover para cada uno, un mismo helper devuelve las funciones atadas a
+  // los ids de cada pestaña.
+  function makeProvincePanel(mapElId, tooltipElId, bodyElId){
+    const tooltipEl = document.getElementById(tooltipElId);
+    const mapWrapEl = document.getElementById(mapElId);
+    function showTooltip(html, evt){
+      if(!tooltipEl) return;
+      tooltipEl.innerHTML = html;
+      tooltipEl.style.display = 'block';
+      moveTooltip(evt);
+    }
+    function moveTooltip(evt){
+      if(!tooltipEl || !evt) return;
+      const pad = 14;
+      let x = evt.clientX + pad, y = evt.clientY + pad;
+      const rect = tooltipEl.getBoundingClientRect();
+      if(x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
+      if(y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
+      tooltipEl.style.left = x+'px';
+      tooltipEl.style.top = y+'px';
+    }
+    function hideTooltip(){ if(tooltipEl) tooltipEl.style.display = 'none'; }
+    function setHover(name){
+      if(mapWrapEl) mapWrapEl.querySelectorAll('[data-prov]').forEach(function(el){
+        el.classList.toggle('prov-hover', name!==null && el.dataset.prov===name);
+      });
+      const body = document.getElementById(bodyElId);
+      if(body) body.querySelectorAll('tr[data-prov]').forEach(function(tr){
+        tr.classList.toggle('prov-hover', name!==null && tr.dataset.prov===name);
+      });
+    }
+    return { mapWrapEl, showTooltip, moveTooltip, hideTooltip, setHover };
+  }
+  const provPanelSaldos = makeProvincePanel('provMap','provTooltip','provBody');
+  const provPanelTasas = makeProvincePanel('tasaProvMap','tasaProvTooltip','tasaProvBody');
 
   // ---------- Slider de ventana de tiempo (compartido entre pestañas) ----------
   const rangeMin = document.getElementById('rangeMin');
@@ -263,36 +298,6 @@
     return 'hsl(150 '+saturation.toFixed(0)+'% '+lightness.toFixed(0)+'%)';
   }
 
-  function showProvTooltip(name, val, pct, prefix, evt){
-    if(!provTooltipEl) return;
-    provTooltipEl.innerHTML = '<b>'+name+'</b><br>'
-      + (val!=null ? fmtMillones(val, prefix)+(pct!=null?' · '+fmtPct.format(pct)+'% del total':'') : 'sin desglose disponible');
-    provTooltipEl.style.display = 'block';
-    moveProvTooltip(evt);
-  }
-  function moveProvTooltip(evt){
-    if(!provTooltipEl || !evt) return;
-    const pad = 14;
-    let x = evt.clientX + pad, y = evt.clientY + pad;
-    const rect = provTooltipEl.getBoundingClientRect();
-    if(x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
-    if(y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
-    provTooltipEl.style.left = x+'px';
-    provTooltipEl.style.top = y+'px';
-  }
-  function hideProvTooltip(){
-    if(provTooltipEl) provTooltipEl.style.display = 'none';
-  }
-  function setProvHover(name){
-    if(provMapWrapEl) provMapWrapEl.querySelectorAll('[data-prov]').forEach(function(el){
-      el.classList.toggle('prov-hover', name!==null && el.dataset.prov===name);
-    });
-    const body = document.getElementById('provBody');
-    if(body) body.querySelectorAll('tr[data-prov]').forEach(function(tr){
-      tr.classList.toggle('prov-hover', name!==null && tr.dataset.prov===name);
-    });
-  }
-
   function renderProvinceTable(act){
     const meta = currencyMeta(state.cur);
     const provs = (act.provincias && act.provincias[meta.provField]) || {};
@@ -317,11 +322,14 @@
       mapEl.querySelectorAll('[data-prov]').forEach(function(el){
         el.addEventListener('mouseenter', function(evt){
           const name = el.dataset.prov;
-          setProvHover(name);
-          showProvTooltip(name, valByProv[name], valByProv[name]!=null && total ? valByProv[name]/total*100 : null, currencyMeta(state.cur).prefix, evt);
+          provPanelSaldos.setHover(name);
+          const val = valByProv[name];
+          const pct = val!=null && total ? val/total*100 : null;
+          const prefix = currencyMeta(state.cur).prefix;
+          provPanelSaldos.showTooltip('<b>'+name+'</b><br>'+(val!=null ? fmtMillones(val, prefix)+(pct!=null?' · '+fmtPct.format(pct)+'% del total':'') : 'sin desglose disponible'), evt);
         });
-        el.addEventListener('mousemove', moveProvTooltip);
-        el.addEventListener('mouseleave', function(){ setProvHover(null); hideProvTooltip(); });
+        el.addEventListener('mousemove', provPanelSaldos.moveTooltip);
+        el.addEventListener('mouseleave', function(){ provPanelSaldos.setHover(null); provPanelSaldos.hideTooltip(); });
       });
     }
     mapEl.querySelectorAll('[data-prov]').forEach(function(el){
@@ -354,15 +362,91 @@
           + '<td class="num mono">'+fmtMillones(val, meta.prefix)+'<div class="barcell"><i style="width:'+w.toFixed(1)+'%"></i></div></td>'
           + '<td class="num sharecol mono">'+fmtPct.format(pct)+'%</td>';
         tr.addEventListener('mouseenter', function(evt){
-          setProvHover(name);
-          showProvTooltip(name, val, pct, meta.prefix, evt);
+          provPanelSaldos.setHover(name);
+          provPanelSaldos.showTooltip('<b>'+name+'</b><br>'+fmtMillones(val, meta.prefix)+' · '+fmtPct.format(pct)+'% del total', evt);
         });
-        tr.addEventListener('mousemove', moveProvTooltip);
-        tr.addEventListener('mouseleave', function(){ setProvHover(null); hideProvTooltip(); });
+        tr.addEventListener('mousemove', provPanelSaldos.moveTooltip);
+        tr.addEventListener('mouseleave', function(){ provPanelSaldos.setHover(null); provPanelSaldos.hideTooltip(); });
         body.appendChild(tr);
       });
     }
     document.getElementById('provDesc').innerHTML = 'Saldo por provincia <b>'+meta.label+'</b> al último dato disponible ('+PLABEL[act.ultimo_periodo]+'). Cuanto más oscura la provincia en el mapa, mayor su saldo.';
+  }
+
+  // Escala de color para el mapa de tasas: a diferencia del saldo (que usa
+  // raíz cuadrada desde 0 porque unas pocas provincias concentran casi todo
+  // el crédito), la tasa de interés no tiene esa concentración -- todas las
+  // provincias tienen una tasa en un rango parecido. Por eso acá se normaliza
+  // linealmente entre el mínimo y el máximo del conjunto visible, para que
+  // el color aproveche todo el degradé en vez de apelotonarse en un extremo.
+  function renderTasaProvinceMap(act){
+    const provs = act.tasas_provincias.pesos || {};
+    const entries = Object.entries(provs).filter(([,v])=> v!==null && v!==undefined);
+    entries.sort((a,b)=> b[1]-a[1]);
+    const max = entries.length ? entries[0][1] : 1;
+    const min = entries.length ? entries[entries.length-1][1] : 0;
+    const span = (max-min) || 1;
+    const valByProv = Object.fromEntries(entries);
+
+    // -------- Mapa --------
+    const mapEl = document.getElementById('tasaProvMap');
+    if(!mapEl.dataset.built){
+      const svgParts = ['<svg viewBox="'+AR_MAP.viewBox+'" preserveAspectRatio="xMidYMid meet">'];
+      Object.keys(AR_MAP.paths).forEach(function(name){
+        svgParts.push('<path data-prov="'+name+'" d="'+AR_MAP.paths[name]+'" />');
+      });
+      svgParts.push('<circle data-prov="CABA" cx="'+AR_MAP.caba.x+'" cy="'+AR_MAP.caba.y+'" r="4.2" />');
+      svgParts.push('</svg>');
+      mapEl.innerHTML = svgParts.join('');
+      mapEl.dataset.built = '1';
+      mapEl.querySelectorAll('[data-prov]').forEach(function(el){
+        el.addEventListener('mouseenter', function(evt){
+          const name = el.dataset.prov;
+          provPanelTasas.setHover(name);
+          const val = valByProv[name];
+          provPanelTasas.showTooltip('<b>'+name+'</b><br>'+(val!=null ? fmtPct.format(val)+'% TNA' : 'sin dato disponible'), evt);
+        });
+        el.addEventListener('mousemove', provPanelTasas.moveTooltip);
+        el.addEventListener('mouseleave', function(){ provPanelTasas.setHover(null); provPanelTasas.hideTooltip(); });
+      });
+    }
+    mapEl.querySelectorAll('[data-prov]').forEach(function(el){
+      const name = el.dataset.prov;
+      const val = valByProv[name];
+      el.setAttribute('fill', val!=null ? provColorScale((val-min)/span) : 'var(--bar-track)');
+      el.classList.toggle('prov-nodata', val==null);
+    });
+
+    const legendEl = document.getElementById('tasaProvLegend');
+    if(legendEl){
+      legendEl.innerHTML = '<span class="provlegend-label">'+(entries.length?fmtPct.format(min)+'%':'—')+'</span>'
+        + '<span class="provlegend-bar"></span>'
+        + '<span class="provlegend-label">'+(entries.length?fmtPct.format(max)+'%':'—')+'</span>';
+    }
+
+    // -------- Listado completo (24 jurisdicciones) --------
+    const body = document.getElementById('tasaProvBody');
+    body.innerHTML='';
+    if(!entries.length){
+      body.innerHTML = '<tr><td colspan="3" style="color:var(--text-faint); padding:16px 10px;">No hay tasa por provincia para esta actividad.</td></tr>';
+    } else {
+      entries.forEach(([name,val], i)=>{
+        const tr = document.createElement('tr');
+        tr.dataset.prov = name;
+        const w = span ? ((val-min)/span*100) : 0;
+        tr.innerHTML = '<td><span class="rank">'+(i+1)+'</span></td>'
+          + '<td class="prov">'+name+'</td>'
+          + '<td class="num mono">'+fmtPct.format(val)+'%<div class="barcell"><i style="width:'+w.toFixed(1)+'%"></i></div></td>';
+        tr.addEventListener('mouseenter', function(evt){
+          provPanelTasas.setHover(name);
+          provPanelTasas.showTooltip('<b>'+name+'</b><br>'+fmtPct.format(val)+'% TNA', evt);
+        });
+        tr.addEventListener('mousemove', provPanelTasas.moveTooltip);
+        tr.addEventListener('mouseleave', function(){ provPanelTasas.setHover(null); provPanelTasas.hideTooltip(); });
+        body.appendChild(tr);
+      });
+    }
+    document.getElementById('tasaProvDesc').innerHTML = 'Tasa en pesos por provincia, último dato disponible ('+PLABEL[act.ultimo_periodo]+'). Cuanto más oscura la provincia en el mapa, más alta su tasa.';
   }
 
   function renderSaldosView(){
@@ -440,26 +524,6 @@
     });
   }
 
-  function renderTasaTables(act){
-    const provs = act.tasas_provincias.pesos || {};
-    const entries = Object.entries(provs).filter(([,v])=> v!==null && v!==undefined);
-    entries.sort((a,b)=> b[1]-a[1]);
-    const top = entries.slice(0,6);
-    const bottom = entries.slice(-6).reverse();
-
-    function fillTable(el, list){
-      el.innerHTML='';
-      list.forEach(([name,val],i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td><span class="rank">'+(i+1)+'</span></td><td class="prov">'+name+'</td><td class="num mono">'+fmtPct.format(val)+'%</td>';
-        el.appendChild(tr);
-      });
-      if(!list.length) el.innerHTML = '<tr><td colspan="3" style="color:var(--text-faint); padding:16px 10px;">Sin datos.</td></tr>';
-    }
-    fillTable(document.getElementById('tasaTopBody'), top);
-    fillTable(document.getElementById('tasaBottomBody'), bottom);
-  }
-
   function renderTasasView(){
     const act = getAct(state.actId);
     const noteEl = document.getElementById('partialNoteTasas');
@@ -476,7 +540,7 @@
       noteEl.style.display = 'none';
     }
     renderTasaChart(act);
-    renderTasaTables(act);
+    renderTasaProvinceMap(act);
   }
 
   // ---------- Resumen nacional: tasa ponderada, diferencial, pesos vs. dólares ----------

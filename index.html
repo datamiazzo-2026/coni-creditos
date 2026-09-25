@@ -106,27 +106,22 @@
 
     <div id="rangeSlot-tasas"></div>
 
-    <div class="twocol">
-      <div class="panel">
-        <h2>Tasas más altas por provincia</h2>
-        <div class="desc">Últimos datos disponibles, en pesos.</div>
-        <div class="tablewrap">
+    <div class="panel">
+      <h2>Tasa por provincia</h2>
+      <div class="desc" id="tasaProvDesc"></div>
+      <div class="provgrid">
+        <div class="provmapwrap">
+          <div class="provmap" id="tasaProvMap"></div>
+          <div class="provlegend" id="tasaProvLegend"></div>
+        </div>
+        <div class="tablewrap provlistwrap">
           <table>
             <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
-            <tbody id="tasaTopBody"></tbody>
+            <tbody id="tasaProvBody"></tbody>
           </table>
         </div>
       </div>
-      <div class="panel">
-        <h2>Tasas más bajas por provincia</h2>
-        <div class="desc">Últimos datos disponibles, en pesos.</div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
-            <tbody id="tasaBottomBody"></tbody>
-          </table>
-        </div>
-      </div>
+      <div class="provtooltip" id="tasaProvTooltip" style="display:none;"></div>
     </div>
   </div>
 
