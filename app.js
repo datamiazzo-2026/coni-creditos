@@ -68,6 +68,16 @@
   }
   updateRangeUI();
 
+  // El slider es un único elemento compartido entre pestañas (mismo estado,
+  // mismos listeners) -- en vez de duplicarlo, lo movemos con appendChild
+  // al slot de la pestaña activa, siempre debajo del gráfico principal.
+  function moveRangeSlider(){
+    const slot = document.getElementById('rangeSlot-'+state.tab);
+    const panel = document.querySelector('.rangepanel');
+    if(slot && panel) slot.appendChild(panel);
+  }
+  moveRangeSlider();
+
   // Cobertura de datos (encabezado y pie), calculada de PERIODOS en vez de
   // quedar hardcodeada: así no hay que tocar el HTML cada vez que se suma
   // un año nuevo.
@@ -105,6 +115,7 @@
     document.getElementById('view-tasas').style.display = state.tab==='tasas' ? '' : 'none';
     document.getElementById('view-resumen').style.display = state.tab==='resumen' ? '' : 'none';
     document.getElementById('mainGrid').classList.toggle('no-sidebar', state.tab==='resumen');
+    moveRangeSlider();
     renderAll();
   });
 
@@ -156,15 +167,25 @@
     tileVar.innerHTML = varHtml;
     wrap.appendChild(tileVar);
 
+    // Mix por moneda de la ventana elegida en el slider: no es el mix de un
+    // solo trimestre, sino el total en dólares (llevado a pesos) sobre el
+    // total general de todos los trimestres visibles -- así un trimestre
+    // grande pesa más que uno chico dentro del promedio, y el número
+    // cambia solo si el saldo de esos trimestres realmente cambia de mix.
+    const windowFull = series.slice(state.rangeStart, state.rangeEnd+1)
+      .filter(s=> s && s.pesos_ars!=null && s.dolares_usd!=null && s.tc!=null && s.total_ars);
     const tileMezcla = document.createElement('div');
     tileMezcla.className='tile';
-    if(last && last.pesos_ars!==null && last.dolares_usd!==null && last.total_ars){
-      const shareUsd = (last.dolares_usd*last.tc)/last.total_ars*100;
+    if(windowFull.length){
+      const sumUsdArs = windowFull.reduce((acc,s)=> acc + s.dolares_usd*s.tc, 0);
+      const sumTotalArs = windowFull.reduce((acc,s)=> acc + s.total_ars, 0);
+      const shareUsd = sumTotalArs ? (sumUsdArs/sumTotalArs*100) : null;
+      const rangoLbl = windowFull.length>1 ? (PLABEL[windowFull[0].periodo]+' a '+PLABEL[windowFull[windowFull.length-1].periodo]) : PLABEL[windowFull[0].periodo];
       tileMezcla.innerHTML = '<div class="label">Mix por moneda</div>'
-        + '<div class="value mono">'+fmtPct.format(shareUsd)+'%</div>'
-        + '<div class="unit">del saldo está en dólares</div>';
+        + '<div class="value mono">'+(shareUsd!=null?fmtPct.format(shareUsd)+'%':'—')+'</div>'
+        + '<div class="unit">del saldo está en dólares · '+rangoLbl+'</div>';
     } else {
-      tileMezcla.innerHTML = '<div class="label">Mix por moneda</div><div class="value mono">—</div><div class="unit">sin desglose</div>';
+      tileMezcla.innerHTML = '<div class="label">Mix por moneda</div><div class="value mono">—</div><div class="unit">sin desglose en la ventana elegida</div>';
     }
     wrap.appendChild(tileMezcla);
 

@@ -34,19 +34,6 @@
 
   <div class="content">
 
-  <div class="panel rangepanel">
-    <div class="rangehead">
-      <h2>Ventana de tiempo</h2>
-      <div class="rangevalue mono" id="rangeValueLabel">—</div>
-    </div>
-    <div class="desc">Arrastrá los extremos para acotar el período que se ve en los gráficos.</div>
-    <div class="rangeslider">
-      <div class="rangetrack"><div class="rangefill" id="rangeFill"></div></div>
-      <input type="range" id="rangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
-      <input type="range" id="rangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
-    </div>
-  </div>
-
   <div id="view-saldos">
 
     <div class="toolbar">
@@ -68,6 +55,21 @@
       <div class="desc" id="chartDesc"></div>
       <div class="legend" id="chartLegend"></div>
       <div class="chartwrap"><canvas id="evolChart"></canvas></div>
+    </div>
+
+    <div id="rangeSlot-saldos">
+      <div class="panel rangepanel">
+        <div class="rangehead">
+          <h2>Ventana de tiempo</h2>
+          <div class="rangevalue mono" id="rangeValueLabel">—</div>
+        </div>
+        <div class="desc">Arrastrá los extremos para acotar el período que se ve en los gráficos.</div>
+        <div class="rangeslider">
+          <div class="rangetrack"><div class="rangefill" id="rangeFill"></div></div>
+          <input type="range" id="rangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
+          <input type="range" id="rangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
+        </div>
+      </div>
     </div>
 
     <div class="panel">
@@ -94,6 +96,8 @@
       <div class="legend" id="tasaLegend"></div>
       <div class="chartwrap"><canvas id="tasaChart"></canvas></div>
     </div>
+
+    <div id="rangeSlot-tasas"></div>
 
     <div class="twocol">
       <div class="panel">
@@ -131,6 +135,8 @@
       <div class="legend" id="resumenTasaLegend"></div>
       <div class="chartwrap"><canvas id="resumenTasaChart"></canvas></div>
     </div>
+
+    <div id="rangeSlot-resumen"></div>
 
     <div class="panel">
       <h2>Diferencial de cada actividad vs. el promedio ponderado</h2>
