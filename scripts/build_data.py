@@ -428,6 +428,47 @@ def build_resumen_nacional(periodos, out_acts):
 
 
 # ---------------------------------------------------------------------------
+# Desglose por provincia, POR PERÍODO (no solo el último)
+# ---------------------------------------------------------------------------
+#
+# El mapa y el ranking por provincia del dashboard siguen la ventana de
+# tiempo elegida con el slider (igual que el resto de la vista), así que
+# necesitan el desglose por provincia de CADA trimestre, no solo del más
+# reciente. El BCRA crudo ya trae provincia por fila para todos los
+# trimestres (no es un dato que solo exista para el último), así que alcanza
+# con repetir para cada período el mismo cálculo que antes se hacía una sola
+# vez para `last_per`.
+
+def _province_breakdown(idx, act, per):
+    """Desglose de SALDOS por provincia, en las 4 monedas/vistas del
+    dashboard, para una actividad y un período puntual. None si no hay fila
+    de TOTAL (moneda 0) para ese período -- mismo criterio que `series`."""
+    r0 = idx.get((act, per, 0))
+    if r0 is None:
+        return None
+    tc = r0.get('tc')
+    total_ars = r0['provincias']
+    r1, r2 = idx.get((act, per, 1)), idx.get((act, per, 2))
+    pesos_ars = r1['provincias'] if r1 else {}
+    dolares_usd = {}
+    total_usd = {}
+    if r2 and tc:
+        dolares_usd = {p: (round(v / tc) if v is not None else None) for p, v in r2['provincias'].items()}
+    if tc:
+        total_usd = {p: (round(v / tc) if v is not None else None) for p, v in total_ars.items()}
+    return {'total_ars': total_ars, 'pesos_ars': pesos_ars, 'dolares_usd': dolares_usd, 'total_usd': total_usd}
+
+
+def _tasas_province_breakdown(idx_tasas, act, per):
+    """Desglose de TASAS por provincia (pesos y dólares) para una actividad
+    y un período puntual. None si no hay ninguna fila de tasa ese período."""
+    t1, t2 = idx_tasas.get((act, per, 1)), idx_tasas.get((act, per, 2))
+    if t1 is None and t2 is None:
+        return None
+    return {'pesos': (t1['provincias'] if t1 else {}), 'dolares': (t2['provincias'] if t2 else {})}
+
+
+# ---------------------------------------------------------------------------
 # Construcción del JSON final
 # ---------------------------------------------------------------------------
 
@@ -477,18 +518,7 @@ def build(source_paths, out_path):
         )
 
         last_per = next((p for p in reversed(periodos) if idx.get((act, p, 0))), None)
-        provs_total_ars, provs_pesos_ars, provs_dolares_usd, provs_total_usd = {}, {}, {}, {}
-        if last_per:
-            tc_last = idx[(act, last_per, 0)].get('tc')
-            provs_total_ars = idx[(act, last_per, 0)]['provincias']
-            r1l, r2l = idx.get((act, last_per, 1)), idx.get((act, last_per, 2))
-            provs_pesos_ars = r1l['provincias'] if r1l else {}
-            if r2l and tc_last:
-                provs_dolares_usd = {p: (round(v / tc_last) if v is not None else None)
-                                      for p, v in r2l['provincias'].items()}
-            if tc_last:
-                provs_total_usd = {p: (round(v / tc_last) if v is not None else None)
-                                    for p, v in provs_total_ars.items()}
+        provincias_series = [_province_breakdown(idx, act, per) for per in periodos]
 
         tasas_series = []
         for per in periodos:
@@ -498,8 +528,7 @@ def build(source_paths, out_path):
         tasas_completo = all(
             idx_tasas.get((act, p, 1)) and idx_tasas.get((act, p, 2)) for p in periodos
         )
-        last_per_tasas = next((p for p in reversed(periodos) if idx_tasas.get((act, p, 1)) or idx_tasas.get((act, p, 2))), last_per)
-        t1l, t2l = idx_tasas.get((act, last_per_tasas, 1)), idx_tasas.get((act, last_per_tasas, 2))
+        tasas_provincias_series = [_tasas_province_breakdown(idx_tasas, act, per) for per in periodos]
 
         out_acts.append({
             'id': slugify(act),
@@ -510,14 +539,10 @@ def build(source_paths, out_path):
             'saldos_moneda_completo': saldos_moneda_completo,
             'tasas_completo': tasas_completo,
             'series': series,
-            'provincias': {'total_ars': provs_total_ars, 'pesos_ars': provs_pesos_ars,
-                            'dolares_usd': provs_dolares_usd, 'total_usd': provs_total_usd},
+            'provincias_series': provincias_series,
             'ultimo_periodo': last_per,
             'tasas': tasas_series,
-            'tasas_provincias': {
-                'pesos': (t1l['provincias'] if t1l else {}),
-                'dolares': (t2l['provincias'] if t2l else {}),
-            },
+            'tasas_provincias_series': tasas_provincias_series,
         })
 
     resumen_nacional = build_resumen_nacional(periodos, out_acts)
