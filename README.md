@@ -25,17 +25,20 @@ netlify.toml              configuración de build/deploy de Netlify
 pasarle varios archivos juntos (por ejemplo uno por año) para que el
 dashboard muestre la serie completa combinada:
 
-1. **Formato "limpio"** (`.xlsx`, hojas `... - SALDOS` / `... - TASAS`): ya
-   viene filtrado a mano a las 12 actividades agro. Es el que se venía
-   usando para 2025.
-2. **Formato "crudo BCRA"** (`.xls`, hojas `Saldos` / `Tasas` /
+1. **Formato "crudo BCRA"** (`.xls`, hojas `Saldos` / `Tasas` /
    `Observaciones`): es el reporte SISCEN completo tal cual lo exporta el
    BCRA, con **todas** las actividades económicas del país (no solo agro),
    en una jerarquía CIIU/CLANAE. El script identifica solo a las 12
    actividades agro **por coincidencia exacta de nombre**, así que se le
-   puede pasar el archivo bruto, sin filtrar antes a mano. Así se cargaron
-   2015 a 2024 (`data/source/PRESTAMOS_AL_SECTOR_AGRO_2015_bcra_crudo.xls`
-   y los correspondientes de 2016 a 2024).
+   puede pasar el archivo bruto, sin filtrar antes a mano. Es el formato
+   que se usa actualmente para **todos** los años cargados, 2015 a 2025
+   (`data/source/PRESTAMOS_AL_SECTOR_AGRO_<año>_bcra_crudo.xls`).
+2. **Formato "limpio"** (`.xlsx`, hojas `... - SALDOS` / `... - TASAS`):
+   pensado para un Excel ya filtrado a mano a las 12 actividades agro. El
+   script lo sigue soportando, pero **no se usa ningún archivo en este
+   formato en el dataset actual** — el que se usaba para 2025 se reemplazó
+   por el crudo BCRA equivalente (ver más abajo, "Reemplazo del Excel
+   'limpio' de 2025").
 
 En ambos formatos, cada fila es `ACTIVIDAD` × `PERIODO` (AAAAMMDD, cierre de
 trimestre) × `MONEDA`, con un total nacional y el desglose por las 24
@@ -105,28 +108,58 @@ años. Conclusión: es un error de tipeo en la plantilla en inglés de ese
 año puntual, no un cambio real de alcance, así que 2017 se cargó igual que
 los demás.
 
+### Reemplazo del Excel "limpio" de 2025
+
+El primer archivo que se cargó para 2025 (`PRESTAMOS_AL_SECTOR_AGRO_2025.xlsx`)
+era un Excel armado a mano, en formato "limpio", filtrado manualmente a las
+12 actividades agro. Una auditoría completa de todo el dataset (2015-2025,
+saldos y tasas, con relectura 100% independiente de cada Excel fuente y
+chequeos de consistencia numérica) encontró que ese archivo tenía el
+**desglose de `SALDOS` por provincia corrido de columna**: a partir de
+"Corrientes" en adelante, cada provincia tenía en realidad el valor de la
+provincia **dos posiciones antes** en la lista (por ejemplo, la columna
+"Tierra del Fuego" tenía el valor real de "Santa Fe"). El total nacional y
+toda la hoja `TASAS` (incluida tasas por provincia) no estaban afectados,
+solo el desglose de `SALDOS` por provincia. El síntoma que lo delató: la
+suma de las 24 provincias no coincidía con el total de la fila (fallaba en
+44 de 48 filas de 2025), y provincias chicas como Tierra del Fuego, Jujuy,
+Catamarca y Chaco mostraban saltos de hasta 30.000x de un trimestre a otro
+mientras provincias grandes como Santa Fe, Salta o La Pampa se desplomaban
+a casi cero — ambas cosas, imposibles en la realidad.
+
+La solución fue pedir el export crudo del BCRA para 2025 (mismo formato que
+2015-2024) y reemplazar el Excel limpio por
+`data/source/PRESTAMOS_AL_SECTOR_AGRO_2025_bcra_crudo.xls`. Este archivo
+pasó los mismos controles automáticos que los demás años (validación de
+encabezados, suma de provincias = total con <1% de diferencia) y además
+mostró continuidad suave con el dato de Dic-24 en las provincias que antes
+tenían saltos imposibles. Como beneficio adicional, el crudo BCRA trae el
+desglose completo por moneda (pesos/dólares) para las 12 actividades — el
+Excel limpio solo lo tenía para 8 (ver debajo). El Excel limpio original no
+se usa más en el dataset; el reemplazo se verificó con el mismo proceso de
+doble control que el resto de los años.
+
 ### Actividades con serie incompleta
 
-8 de las 12 actividades tienen todos los trimestres completos y
-discriminados por moneda. Las otras 4 (granja y otros animales,
-procesamiento de carnes y alimentos, elaboración de lácteos, molinería y
-alimento balanceado) sí tenían desglose por moneda desde 2015 y hasta 2024,
-pero desde 2025 la fuente solo reporta el saldo **total** (moneda 0) para
-ellas — no hay pesos/dólares por separado, y en `TASAS` falta el dato en
-dólares. Como la completitud se calcula sobre la serie combinada completa,
-este corte en 2025 alcanza para marcar estas 4 actividades como
-incompletas aunque tengan el desglose en los 40 trimestres anteriores.
+Actualmente **no hay ninguna** actividad con serie incompleta: las 12
+actividades tienen los 44 trimestres (Mar-15 a Dic-25) completos, con
+desglose por moneda en `SALDOS` y `TASAS`. Esto es así desde que se
+reemplazó el Excel "limpio" de 2025 por el crudo BCRA equivalente (ver
+arriba) — el archivo limpio solo traía el saldo **total** (moneda 0) para 4
+de las 12 actividades (granja y otros animales, procesamiento de carnes y
+alimentos, elaboración de lácteos, molinería y alimento balanceado), sin
+pesos/dólares por separado ni tasa en dólares; el crudo BCRA sí trae el
+desglose completo para las 12.
 
-El dashboard trata estos tres niveles de completitud por separado (campos
-`saldos_total_completo`, `saldos_moneda_completo` y `tasas_completo` en el
-JSON, recalculados sobre **todos** los trimestres combinados, no un número
-fijo), en vez de un único flag: para estas 4 actividades muestra igual el
-gráfico, las tiles y la tabla de provincia en la vista **Total (US$
-equiv.)** con todos los trimestres, pero deshabilita las vistas
-Pesos/Dólares (avisándolo) y muestra el aviso de dato parcial en la
-pestaña Tasas. Si en el futuro vuelve a aparecer el desglose por moneda o
-más trimestres de tasa, `scripts/build_data.py` los toma solos sin tocar
-código.
+El dashboard igual calcula la completitud en tres niveles por separado
+(campos `saldos_total_completo`, `saldos_moneda_completo` y
+`tasas_completo` en el JSON, recalculados sobre **todos** los trimestres
+combinados, no un número fijo) por si en el futuro una fuente nueva vuelve
+a traer menos desglose que las anteriores: en ese caso el dashboard
+mostraría igual el gráfico, las tiles y la tabla de provincia en la vista
+**Total (US$ equiv.)** con todos los trimestres, pero deshabilitaría las
+vistas Pesos/Dólares (avisándolo) y mostraría el aviso de dato parcial en
+la pestaña Tasas, sin tocar código.
 
 ## Actualizar con un trimestre nuevo
 
@@ -137,7 +170,7 @@ código.
    ```bash
    pip install openpyxl xlrd
    python3 scripts/build_data.py data/dashboard_data.json \
-       data/source/PRESTAMOS_AL_SECTOR_AGRO_2025.xlsx \
+       data/source/PRESTAMOS_AL_SECTOR_AGRO_2025_bcra_crudo.xls \
        data/source/PRESTAMOS_AL_SECTOR_AGRO_2024_bcra_crudo.xls
    ```
    El script imprime cuántas filas leyó de cada archivo y, al final,
