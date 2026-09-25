@@ -34,8 +34,8 @@ dashboard muestre la serie completa combinada:
    en una jerarquía CIIU/CLANAE. El script identifica solo a las 12
    actividades agro **por coincidencia exacta de nombre**, así que se le
    puede pasar el archivo bruto, sin filtrar antes a mano. Así se cargaron
-   2023 y 2024 (`data/source/PRESTAMOS_AL_SECTOR_AGRO_2023_bcra_crudo.xls`
-   y `..._2024_bcra_crudo.xls`).
+   2020, 2021, 2022, 2023 y 2024 (`data/source/PRESTAMOS_AL_SECTOR_AGRO_
+   2020_bcra_crudo.xls` y los correspondientes de 2021 a 2024).
 
 En ambos formatos, cada fila es `ACTIVIDAD` × `PERIODO` (AAAAMMDD, cierre de
 trimestre) × `MONEDA`, con un total nacional y el desglose por las 24
@@ -98,9 +98,12 @@ lista `aliases` de esa función alcanza para resolverlo.
 8 de las 12 actividades tienen todos los trimestres completos y
 discriminados por moneda. Las otras 4 (granja y otros animales,
 procesamiento de carnes y alimentos, elaboración de lácteos, molinería y
-alimento balanceado) sí tenían desglose por moneda en 2024, pero desde 2025
-la fuente solo reporta el saldo **total** (moneda 0) para ellas — no hay
-pesos/dólares por separado, y en `TASAS` falta el dato en dólares.
+alimento balanceado) sí tenían desglose por moneda desde 2020 y hasta 2024,
+pero desde 2025 la fuente solo reporta el saldo **total** (moneda 0) para
+ellas — no hay pesos/dólares por separado, y en `TASAS` falta el dato en
+dólares. Como la completitud se calcula sobre la serie combinada completa,
+este corte en 2025 alcanza para marcar estas 4 actividades como
+incompletas aunque tengan el desglose en los 20 trimestres anteriores.
 
 El dashboard trata estos tres niveles de completitud por separado (campos
 `saldos_total_completo`, `saldos_moneda_completo` y `tasas_completo` en el
