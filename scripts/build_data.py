@@ -366,6 +366,68 @@ def read_any_workbook(path):
 
 
 # ---------------------------------------------------------------------------
+# Resumen nacional: tasa ponderada, y costo efectivo dólares vs. pesos
+# ---------------------------------------------------------------------------
+#
+# Tasa ponderada de un período = promedio de la tasa de cada actividad,
+# ponderado por el peso relativo de esa actividad sobre el saldo total (en
+# esa misma moneda) del período. Se calcula por separado en pesos y en
+# dólares, porque el peso de cada actividad no es el mismo en cada moneda
+# (ej.: cerealera concentra mucho más crédito en dólares que en pesos).
+#
+# Costo efectivo del crédito en dólares, expresado en pesos = combina la
+# tasa ponderada en dólares con la devaluación interanual (4 trimestres)
+# realizada, para poder compararla de igual a igual contra la tasa
+# ponderada en pesos. No existe para los primeros 4 trimestres de la serie
+# (no hay "hace un año" contra qué comparar el tipo de cambio).
+
+def build_resumen_nacional(periodos, out_acts):
+    resumen = []
+    for i, per in enumerate(periodos):
+        pesos_num = pesos_den = 0.0
+        dolares_num = dolares_den = 0.0
+        total_ars_nacional = 0.0
+        tcs = []
+        for act in out_acts:
+            s = act['series'][i]
+            t = act['tasas'][i]
+            if s and s.get('pesos_ars') and t.get('pesos') is not None:
+                pesos_num += s['pesos_ars'] * t['pesos']
+                pesos_den += s['pesos_ars']
+            if s and s.get('dolares_usd') and t.get('dolares') is not None:
+                dolares_num += s['dolares_usd'] * t['dolares']
+                dolares_den += s['dolares_usd']
+            if s and s.get('total_ars'):
+                total_ars_nacional += s['total_ars']
+            if s and s.get('tc'):
+                tcs.append(s['tc'])
+        if tcs and (max(tcs) - min(tcs)) / max(tcs) > 0.001:
+            raise ValueError(
+                f"El tipo de cambio no coincide entre actividades en el período {per}: {tcs} "
+                "-- se esperaba el mismo TC nacional para todas."
+            )
+        resumen.append({
+            'periodo': per,
+            'tasa_pesos_ponderada': round(pesos_num / pesos_den, 2) if pesos_den else None,
+            'tasa_dolares_ponderada': round(dolares_num / dolares_den, 2) if dolares_den else None,
+            'tc': tcs[0] if tcs else None,
+            'total_ars_nacional': round(total_ars_nacional) if total_ars_nacional else None,
+        })
+
+    for i, r in enumerate(resumen):
+        r_prev = resumen[i - 4] if i >= 4 else None
+        if r_prev and r_prev['tc'] and r['tc'] and r['tasa_dolares_ponderada'] is not None:
+            var_tc = (r['tc'] / r_prev['tc'] - 1) * 100
+            costo = ((1 + r['tasa_dolares_ponderada'] / 100) * (1 + var_tc / 100) - 1) * 100
+            r['var_tc_interanual'] = round(var_tc, 2)
+            r['costo_efectivo_dolares'] = round(costo, 2)
+        else:
+            r['var_tc_interanual'] = None
+            r['costo_efectivo_dolares'] = None
+    return resumen
+
+
+# ---------------------------------------------------------------------------
 # Construcción del JSON final
 # ---------------------------------------------------------------------------
 
@@ -458,13 +520,19 @@ def build(source_paths, out_path):
             },
         })
 
+    resumen_nacional = build_resumen_nacional(periodos, out_acts)
+
     data = {'periodos': periodos, 'periodos_label': periodos_label,
-            'provincias': PROVINCIAS, 'actividades': out_acts}
+            'provincias': PROVINCIAS, 'actividades': out_acts,
+            'resumen_nacional': resumen_nacional}
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
     print(f"OK: {len(out_acts)} actividades, {len(periodos)} períodos ({periodos_label[periodos[0]]} a {periodos_label[periodos[-1]]}) -> {out_path}")
+    ultimo = resumen_nacional[-1]
+    print(f"Tasa ponderada nacional ({periodos_label[ultimo['periodo']]}): "
+          f"pesos {ultimo['tasa_pesos_ponderada']}%, dólares {ultimo['tasa_dolares_ponderada']}%")
 
 
 if __name__ == '__main__':
