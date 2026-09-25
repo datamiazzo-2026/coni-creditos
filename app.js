@@ -33,7 +33,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', rangeStart:0, rangeEnd: PERIODOS.length-1 };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', rangeStart:0, rangeEnd: PERIODOS.length-1 };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -168,6 +168,14 @@
     renderSaldosView();
   });
 
+  document.getElementById('tasaProvCurSeg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-cur]');
+    if(!btn) return;
+    state.curTasaProv = btn.dataset.cur;
+    [...document.getElementById('tasaProvCurSeg').children].forEach(c=>c.classList.toggle('active', c===btn));
+    renderTasaProvinceMap(getAct(state.actId));
+  });
+
   let evolChart, tasaChart;
 
   function renderTiles(act){
@@ -300,7 +308,14 @@
 
   function renderProvinceTable(act){
     const meta = currencyMeta(state.cur);
-    const provs = (act.provincias && act.provincias[meta.provField]) || {};
+    // El mapa/ranking siguen el extremo derecho de la ventana de tiempo del
+    // slider -- igual criterio que el resto de la vista (ver renderDiffChart
+    // en Resumen) -- en vez de mostrar siempre el último trimestre de toda
+    // la serie.
+    const idx = state.rangeEnd;
+    const per = PERIODOS[idx];
+    const entry = act.provincias_series && act.provincias_series[idx];
+    const provs = (entry && entry[meta.provField]) || {};
     const entries = Object.entries(provs).filter(([,v])=> v!==null && v!==undefined);
     entries.sort((a,b)=> b[1]-a[1]);
     const total = entries.reduce((s,[,v])=>s+v,0);
@@ -350,7 +365,7 @@
     const body = document.getElementById('provBody');
     body.innerHTML='';
     if(!entries.length){
-      body.innerHTML = '<tr><td colspan="4" style="color:var(--text-faint); padding:16px 10px;">No hay desglose por provincia para esta vista de moneda.</td></tr>';
+      body.innerHTML = '<tr><td colspan="4" style="color:var(--text-faint); padding:16px 10px;">No hay desglose por provincia para '+PLABEL[per]+' en esta vista de moneda.</td></tr>';
     } else {
       entries.forEach(([name,val], i)=>{
         const tr = document.createElement('tr');
@@ -370,7 +385,7 @@
         body.appendChild(tr);
       });
     }
-    document.getElementById('provDesc').innerHTML = 'Saldo por provincia <b>'+meta.label+'</b> al último dato disponible ('+PLABEL[act.ultimo_periodo]+'). Cuanto más oscura la provincia en el mapa, mayor su saldo.';
+    document.getElementById('provDesc').innerHTML = 'Saldo por provincia <b>'+meta.label+'</b> en <b>'+PLABEL[per]+'</b> (extremo de la ventana de tiempo elegida). Cuanto más oscura la provincia en el mapa, mayor su saldo.';
   }
 
   // Escala de color para el mapa de tasas: a diferencia del saldo (que usa
@@ -380,7 +395,14 @@
   // linealmente entre el mínimo y el máximo del conjunto visible, para que
   // el color aproveche todo el degradé en vez de apelotonarse en un extremo.
   function renderTasaProvinceMap(act){
-    const provs = act.tasas_provincias.pesos || {};
+    const cur = state.curTasaProv;
+    const curLabel = cur==='dolares' ? 'en dólares' : 'en pesos';
+    // Mismo criterio que el mapa de Saldos: sigue el extremo derecho de la
+    // ventana de tiempo del slider, no siempre el último trimestre.
+    const idx = state.rangeEnd;
+    const per = PERIODOS[idx];
+    const entry = act.tasas_provincias_series && act.tasas_provincias_series[idx];
+    const provs = (entry && entry[cur]) || {};
     const entries = Object.entries(provs).filter(([,v])=> v!==null && v!==undefined);
     entries.sort((a,b)=> b[1]-a[1]);
     const max = entries.length ? entries[0][1] : 1;
@@ -428,7 +450,7 @@
     const body = document.getElementById('tasaProvBody');
     body.innerHTML='';
     if(!entries.length){
-      body.innerHTML = '<tr><td colspan="3" style="color:var(--text-faint); padding:16px 10px;">No hay tasa por provincia para esta actividad.</td></tr>';
+      body.innerHTML = '<tr><td colspan="3" style="color:var(--text-faint); padding:16px 10px;">No hay tasa por provincia '+curLabel+' para '+PLABEL[per]+'.</td></tr>';
     } else {
       entries.forEach(([name,val], i)=>{
         const tr = document.createElement('tr');
@@ -446,7 +468,7 @@
         body.appendChild(tr);
       });
     }
-    document.getElementById('tasaProvDesc').innerHTML = 'Tasa en pesos por provincia, último dato disponible ('+PLABEL[act.ultimo_periodo]+'). Cuanto más oscura la provincia en el mapa, más alta su tasa.';
+    document.getElementById('tasaProvDesc').innerHTML = 'Tasa <b>'+curLabel+'</b> por provincia en <b>'+PLABEL[per]+'</b> (extremo de la ventana de tiempo elegida). Cuanto más oscura la provincia en el mapa, más alta su tasa.';
   }
 
   function renderSaldosView(){

@@ -107,7 +107,13 @@
     <div id="rangeSlot-tasas"></div>
 
     <div class="panel">
-      <h2>Tasa por provincia</h2>
+      <div class="panelhead">
+        <h2>Tasa por provincia</h2>
+        <div class="segmented" id="tasaProvCurSeg">
+          <button data-cur="pesos" class="active">Pesos ($)</button>
+          <button data-cur="dolares">Dólares (US$)</button>
+        </div>
+      </div>
       <div class="desc" id="tasaProvDesc"></div>
       <div class="provgrid">
         <div class="provmapwrap">

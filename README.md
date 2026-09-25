@@ -208,29 +208,45 @@ que ya usa el resto del script.
 
 El control "Ventana de tiempo", debajo del gráfico principal de cada
 pestaña, filtra qué trimestres se ven en todos los gráficos (Saldos, Tasas
-y Resumen) sin alterar los datos ni la tabla de provincias, que sigue
-mostrando siempre el último dato disponible. También recalcula, en vivo:
-la tile "Variación del período" (compara el extremo izquierdo del slider
-contra el derecho, no siempre Mar-15 contra el último dato), la tile "Mix
-por moneda" (promedio ponderado por saldo de todos los trimestres
-visibles, no solo el último) y, en la pestaña Resumen, las tres tiles de
-tasa/costo efectivo y el trimestre de referencia del gráfico de
-diferencial (todos usan el extremo derecho de la ventana elegida). Es
-100% client-side (`app.js`), no requiere tocar el JSON. Un mismo
-`<div class="rangepanel">` se reubica entre pestañas con
-`moveRangeSlider()` (`appendChild` a `#rangeSlot-<tab>`) en vez de
-duplicarse.
+y Resumen). También recalcula, en vivo, todo lo que depende de "qué
+trimestre estamos mirando": la tile "Variación del período" (compara el
+extremo izquierdo del slider contra el derecho, no siempre Mar-15 contra
+el último dato), la tile "Mix por moneda" (promedio ponderado por saldo de
+todos los trimestres visibles, no solo el último), el mapa + ranking por
+provincia de Saldos y de Tasas (ver más abajo) y, en la pestaña Resumen,
+las tres tiles de tasa/costo efectivo y el trimestre de referencia del
+gráfico de diferencial. Todos estos usan el extremo **derecho** de la
+ventana elegida (`state.rangeEnd`) como "el trimestre actual" -- si el
+slider está en su posición default (todo el rango), coincide con el
+último dato disponible; si se lo acota, por ejemplo hasta Mar-25, todos
+esos elementos pasan a mostrar Mar-25. Es 100% client-side (`app.js`), no
+requiere tocar el JSON. Un mismo `<div class="rangepanel">` se reubica
+entre pestañas con `moveRangeSlider()` (`appendChild` a
+`#rangeSlot-<tab>`) en vez de duplicarse.
 
-## Mapa de saldo por provincia
+## Mapa de saldo (y de tasa) por provincia
 
-El panel "Saldo por provincia" (pestaña Saldos) combina un mapa de
-Argentina coroplético con el ranking de las 24 jurisdicciones, lado a
-lado. Cuanto más oscura una provincia, mayor su saldo en la actividad y
-moneda elegidas (segmented "Total/Pesos/Dólares" arriba). Pasar el mouse
-por una provincia del mapa -- o por una fila del listado -- muestra un
-tooltip con el monto y el % del total, y resalta la contraparte (fila ↔
-provincia) para ubicarla fácil.
+El panel "Saldo por provincia" (pestaña Saldos) y el panel "Tasa por
+provincia" (pestaña Tasas) combinan un mapa de Argentina coroplético con
+el ranking de las 24 jurisdicciones, lado a lado. Cuanto más oscura una
+provincia, mayor su saldo/tasa en la actividad, moneda (segmented
+"Total/Pesos/Dólares" en Saldos, "Pesos/Dólares" en Tasas) y **trimestre**
+elegidos -- ambos paneles siguen el extremo derecho del slider de
+"Ventana de tiempo", no un dato fijo (ver sección anterior). Pasar el
+mouse por una provincia del mapa -- o por una fila del listado -- muestra
+un tooltip con el monto/tasa y resalta la contraparte (fila ↔ provincia)
+para ubicarla fácil.
 
+- **Los datos son series por período, no una foto fija**: cada actividad
+  trae `provincias_series` y `tasas_provincias_series` en
+  `dashboard_data.json`, un array con un desglose por provincia **por
+  cada trimestre** (mismo índice que `periodos`/`series`/`tasas`), en vez
+  de un único snapshot del último dato. `app.js` indexa ambos arrays con
+  `state.rangeEnd` para saber qué trimestre mostrar. Esto multiplicó el
+  peso del JSON (de ~150 KB a ~1,6 MB sin comprimir, ~240 KB con gzip,
+  que es lo que efectivamente viaja por red) porque ahora hay 46 fotos en
+  vez de 1 -- sigue siendo una sola descarga al cargar la página, nada
+  que abra de golpe una app que ya carga Chart.js por CDN.
 - **`data/ar_map.json`**: geometría del mapa ya proyectada y lista para
   SVG -- `{ viewBox, paths: { "<nombre de provincia>": "<d de un
   <path>>" }, caba: {x, y} }`. Las 23 provincias vienen de
@@ -238,10 +254,11 @@ provincia) para ubicarla fácil.
   (GeoJSON público, uno por provincia); CABA no viene en ese repo por ser
   minúscula a esta escala, así que se dibuja como un círculo en su
   centroide (fuente: API de Georef del Ministerio del Interior). Las
-  claves de `paths` son exactamente los nombres que ya usa
-  `act.provincias` en `dashboard_data.json` (`"BS AS"`, `"CABA"`,
-  `"Santiago del estero"`, `"Tierra del fuego"`, etc.), así no hace falta
-  ningún diccionario de traducción en el frontend.
+  claves de `paths` son exactamente los nombres que ya usa cada entrada de
+  `provincias_series`/`tasas_provincias_series` en `dashboard_data.json`
+  (`"BS AS"`, `"CABA"`, `"Santiago del estero"`, `"Tierra del fuego"`,
+  etc.), así no hace falta ningún diccionario de traducción en el
+  frontend.
 - Cómo se generó: se bajó el GeoJSON de cada provincia, se proyectaron
   lon/lat con una proyección equirrectangular simple (x = lon·cos(lat₀),
   y = -lat, con lat₀ el promedio de latitud del país) y se simplificó
@@ -263,34 +280,43 @@ provincia) para ubicarla fácil.
 - Las provincias sin dato para la moneda elegida se pintan de un gris
   clarito fijo (`.prov-nodata`), no de blanco, para diferenciar "sin
   desglose" de "saldo muy bajo".
-- **Reutilizado en la pestaña Tasas** (panel "Tasa por provincia"): mismo
-  esquema de mapa + ranking completo de las 24 jurisdicciones, coloreado
-  por tasa en pesos en vez de saldo. Reemplazó a las dos tablas viejas
-  ("Tasas más altas/bajas por provincia", top 5 cada una). En `app.js`,
+- **El panel de Tasas reutiliza el de Saldos**: mismo esquema de mapa +
+  ranking completo de las 24 jurisdicciones, coloreado por tasa en vez de
+  saldo. Reemplazó a las dos tablas viejas ("Tasas más altas/bajas por
+  provincia", top 5 cada una). En `app.js`,
   `makeProvincePanel(mapElId, tooltipElId, bodyElId)` factoriza el manejo
   de tooltip/hover (antes atado a los ids fijos `provMap`/`provTooltip`/
   `provBody`) para que Saldos y Tasas puedan tener cada uno su propia
   instancia (`provPanelSaldos`, `provPanelTasas`) sin duplicar código; el
   armado del SVG y el color siguen en cada `render*` porque difieren
   bastante (moneda + `sqrt` vs. tasa + escala lineal, ver abajo).
+- **Selector de moneda propio en Tasas** (`#tasaProvCurSeg`, arriba a la
+  derecha del panel, junto al título -- clase `.panelhead` en
+  `styles.css`): Pesos/Dólares, independiente del segmented de Saldos y
+  también independiente de la leyenda clickeable del gráfico "Tasa
+  nacional por trimestre" (esa solo oculta/muestra series del gráfico, no
+  cambia qué moneda mira el mapa). Guarda su elección en
+  `state.curTasaProv` y solo vuelve a dibujar el panel de provincia
+  (`renderTasaProvinceMap`), no toda la vista.
   - **Escala de color distinta**: a diferencia del saldo (unas pocas
     provincias concentran casi todo el crédito → raíz cuadrada desde 0),
     la tasa de interés no tiene esa concentración -- ninguna provincia
     tiene "casi toda la tasa". Por eso el mapa de tasas normaliza
     linealmente entre el mínimo y el máximo *de las provincias con dato
-    en esa actividad*, no entre 0 y el máximo: así aprovecha todo el
-    degradé en vez de que todo el mapa salga oscuro (si usara 0 como
-    piso, con tasas típicamente entre 30% y 90%, casi todas las
-    provincias caerían muy cerca del extremo oscuro).
-  - **Aviso sobre los 0,0%**: en `tasas_provincias.pesos`, una provincia
-    sin operaciones reportadas para esa actividad viene como `0.0`, no
-    como `null` (mismo criterio que ya usaba `tasas_provincias.dolares`).
-    El mapa y el listado los muestran como una tasa real de 0,0% -- es el
-    mismo comportamiento que ya tenían las tablas viejas de "más bajas
-    por provincia" (podían mostrar estos mismos ceros), solo que ahora se
-    ven los 24 en vez de 6 y quedan más a la vista. Si en algún momento se
-    quiere distinguir "0% real" de "sin operaciones", habría que sumar un
-    campo aparte en `build_data.py` (hoy la fuente BCRA no lo distingue).
+    en esa actividad, moneda y trimestre*, no entre 0 y el máximo: así
+    aprovecha todo el degradé en vez de que todo el mapa salga oscuro (si
+    usara 0 como piso, con tasas típicamente entre 30% y 90%, casi todas
+    las provincias caerían muy cerca del extremo oscuro).
+  - **Aviso sobre los 0,0%**: en `tasas_provincias_series[i].pesos`, una
+    provincia sin operaciones reportadas para esa actividad/trimestre
+    viene como `0.0`, no como `null` (mismo criterio que ya usaba
+    `.dolares`). El mapa y el listado los muestran como una tasa real de
+    0,0% -- es el mismo comportamiento que ya tenían las tablas viejas de
+    "más bajas por provincia" (podían mostrar estos mismos ceros), solo
+    que ahora se ven los 24 en vez de 6 y quedan más a la vista. Si en
+    algún momento se quiere distinguir "0% real" de "sin operaciones",
+    habría que sumar un campo aparte en `build_data.py` (hoy la fuente
+    BCRA no lo distingue).
 
 ## Formato de montos chicos
 
