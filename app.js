@@ -8,11 +8,21 @@
 
   const fmt1 = new Intl.NumberFormat('es-AR', {maximumFractionDigits:1, minimumFractionDigits:1});
   const fmtPct = new Intl.NumberFormat('es-AR', {maximumFractionDigits:1, minimumFractionDigits:1});
+  const fmtInt = new Intl.NumberFormat('es-AR', {maximumFractionDigits:0});
 
+  // Elige la escala (millones / miles / unidad) según la magnitud del valor,
+  // para que un monto chico (ej. el saldo de una provincia con poco crédito)
+  // no se vea siempre como "0,0 M".
+  function pickScale(maxAbs){
+    if(maxAbs >= 1e6) return {div:1e6, suf:' M'};
+    if(maxAbs >= 1e3) return {div:1e3, suf:' K'};
+    return {div:1, suf:''};
+  }
   function fmtMillones(v, prefix){
     if(v===null||v===undefined) return '—';
-    const m = v/1e6;
-    return prefix + ' ' + fmt1.format(m) + ' M';
+    const scale = pickScale(Math.abs(v));
+    if(scale.div===1) return prefix + ' ' + fmtInt.format(v);
+    return prefix + ' ' + fmt1.format(v/scale.div) + scale.suf;
   }
   function currencyMeta(cur){
     if(cur==='pesos') return {prefix:'$', field:'pesos_ars', provField:'pesos_ars', label:'en pesos'};
@@ -20,7 +30,43 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total' };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', rangeStart:0, rangeEnd: PERIODOS.length-1 };
+
+  // ---------- Slider de ventana de tiempo (compartido entre pestañas) ----------
+  const rangeMin = document.getElementById('rangeMin');
+  const rangeMax = document.getElementById('rangeMax');
+  const rangeFill = document.getElementById('rangeFill');
+  const rangeValueLabel = document.getElementById('rangeValueLabel');
+
+  function updateRangeUI(){
+    const a = state.rangeStart, b = state.rangeEnd;
+    const lastIdx = PERIODOS.length-1;
+    const pctA = lastIdx ? (a/lastIdx*100) : 0;
+    const pctB = lastIdx ? (b/lastIdx*100) : 100;
+    rangeFill.style.left = pctA+'%';
+    rangeFill.style.right = (100-pctB)+'%';
+    rangeValueLabel.textContent = PLABEL[PERIODOS[a]]+' — '+PLABEL[PERIODOS[b]];
+  }
+  if(PERIODOS.length>1){
+    rangeMin.max = rangeMax.max = String(PERIODOS.length-1);
+    rangeMin.value = String(state.rangeStart);
+    rangeMax.value = String(state.rangeEnd);
+    rangeMin.addEventListener('input', ()=>{
+      let a = Number(rangeMin.value);
+      if(a > state.rangeEnd){ a = state.rangeEnd; rangeMin.value = String(a); }
+      state.rangeStart = a;
+      updateRangeUI(); renderAll();
+    });
+    rangeMax.addEventListener('input', ()=>{
+      let b = Number(rangeMax.value);
+      if(b < state.rangeStart){ b = state.rangeStart; rangeMax.value = String(b); }
+      state.rangeEnd = b;
+      updateRangeUI(); renderAll();
+    });
+  } else {
+    document.querySelector('.rangepanel').style.display = 'none';
+  }
+  updateRangeUI();
 
   // Cobertura de datos (encabezado y pie), calculada de PERIODOS en vez de
   // quedar hardcodeada: así no hay que tocar el HTML cada vez que se suma
@@ -57,6 +103,8 @@
     [...document.getElementById('tabsNav').children].forEach(c=>c.classList.toggle('active', c===btn));
     document.getElementById('view-saldos').style.display = state.tab==='saldos' ? '' : 'none';
     document.getElementById('view-tasas').style.display = state.tab==='tasas' ? '' : 'none';
+    document.getElementById('view-resumen').style.display = state.tab==='resumen' ? '' : 'none';
+    document.getElementById('mainGrid').classList.toggle('no-sidebar', state.tab==='resumen');
     renderAll();
   });
 
@@ -75,7 +123,15 @@
     const series = act.series;
     const valid = series.filter(s=>s && s[meta.field]!==null && s[meta.field]!==undefined);
     const last = valid[valid.length-1];
-    const first = valid[0];
+
+    // La tile de variación usa la ventana elegida en el slider de tiempo,
+    // no siempre "desde el primer trimestre" -- así el slider también
+    // cambia lo que dice esta tile, no solo los gráficos.
+    const windowSeries = series.slice(state.rangeStart, state.rangeEnd+1)
+      .filter(s=>s && s[meta.field]!==null && s[meta.field]!==undefined);
+    const wFirst = windowSeries[0];
+    const wLast = windowSeries[windowSeries.length-1];
+
     const wrap = document.getElementById('tiles');
     wrap.innerHTML='';
 
@@ -89,13 +145,13 @@
     const tileVar = document.createElement('div');
     tileVar.className='tile';
     let varHtml = '<div class="label">Variación del período</div>';
-    if(first && last && first!==last && first[meta.field]){
-      const pct = ((last[meta.field]-first[meta.field])/Math.abs(first[meta.field]))*100;
+    if(wFirst && wLast && wFirst!==wLast && wFirst[meta.field]){
+      const pct = ((wLast[meta.field]-wFirst[meta.field])/Math.abs(wFirst[meta.field]))*100;
       const good = pct>=0;
       varHtml += '<div class="value mono">'+(good?'+':'')+fmtPct.format(pct)+'%</div>'
-        + '<span class="chip '+(good?'good':'bad')+'">'+(good?'▲ suba':'▼ baja')+' vs '+PLABEL[first.periodo]+'</span>';
+        + '<span class="chip '+(good?'good':'bad')+'">'+(good?'▲ suba':'▼ baja')+' vs '+PLABEL[wFirst.periodo]+'</span>';
     } else {
-      varHtml += '<div class="value mono">—</div><div class="unit">sin serie suficiente</div>';
+      varHtml += '<div class="value mono">—</div><div class="unit">sin serie suficiente en la ventana elegida</div>';
     }
     tileVar.innerHTML = varHtml;
     wrap.appendChild(tileVar);
@@ -123,9 +179,13 @@
 
   function renderChart(act){
     const meta = currencyMeta(state.cur);
-    const labels = PERIODOS.map(p=>PLABEL[p]);
-    const values = act.series.map(s => s && s[meta.field]!==undefined ? s[meta.field] : null);
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const values = act.series.slice(state.rangeStart, state.rangeEnd+1)
+      .map(s => s && s[meta.field]!==undefined ? s[meta.field] : null);
     const lastIdx = values.reduce((acc,v,i)=> v!==null ? i : acc, -1);
+    const maxAbs = values.reduce((m,v)=> v!==null ? Math.max(m, Math.abs(v)) : m, 0);
+    const scale = pickScale(maxAbs);
 
     const styles = getComputedStyle(document.documentElement);
     const muted = styles.getPropertyValue('--bar-muted').trim();
@@ -140,7 +200,7 @@
     evolChart = new Chart(ctx, {
       type:'bar',
       data:{ labels, datasets:[{
-        data: values.map(v=>v===null?0:v/1e6),
+        data: values.map(v=>v===null?0:v/scale.div),
         backgroundColor: bg,
         borderRadius: 5,
         maxBarThickness: 56,
@@ -148,17 +208,17 @@
       options:{
         responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{display:false},
-          tooltip:{ callbacks:{ label:(c)=> meta.prefix+' '+fmt1.format(c.raw)+' M' } }
+          tooltip:{ callbacks:{ label:(c)=> meta.prefix+' '+fmt1.format(c.raw)+scale.suf } }
         },
         scales:{
           x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
-          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> meta.prefix+' '+fmt1.format(v)+'M' }, beginAtZero:true }
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> meta.prefix+' '+fmt1.format(v)+scale.suf }, beginAtZero:true }
         }
       }
     });
 
-    const rangoLbl = PLABEL[PERIODOS[0]]+' a '+PLABEL[PERIODOS[PERIODOS.length-1]];
-    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b> por trimestre, '+rangoLbl+'. La última barra marca el corte más reciente disponible.';
+    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
+    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b> por trimestre, '+rangoLbl+'. La última barra marca el corte más reciente disponible en la ventana elegida.';
     document.getElementById('chartLegend').innerHTML =
       '<span><i style="background:'+muted+'"></i>trimestre anterior</span>'
       + '<span><i style="background:'+hi+'"></i>último dato</span>';
@@ -223,9 +283,11 @@
   }
 
   function renderTasaChart(act){
-    const labels = PERIODOS.map(p=>PLABEL[p]);
-    const pesos = act.tasas.map(t=>t.pesos);
-    const dolares = act.tasas.map(t=>t.dolares);
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const tasasVisible = act.tasas.slice(state.rangeStart, state.rangeEnd+1);
+    const pesos = tasasVisible.map(t=>t.pesos);
+    const dolares = tasasVisible.map(t=>t.dolares);
 
     const styles = getComputedStyle(document.documentElement);
     const accent = styles.getPropertyValue('--accent').trim();
@@ -304,6 +366,173 @@
     renderTasaTables(act);
   }
 
+  // ---------- Resumen nacional: tasa ponderada, diferencial, pesos vs. dólares ----------
+  let resumenTasaChart, diffChart, costoChart;
+  const RN = DATA.resumen_nacional || [];
+
+  function renderResumenTiles(){
+    const last = RN[RN.length-1];
+    const wrap = document.getElementById('resumenTiles');
+    wrap.innerHTML='';
+    if(!last){ return; }
+
+    const t1 = document.createElement('div'); t1.className='tile';
+    t1.innerHTML = '<div class="label">Tasa ponderada · pesos</div>'
+      + '<div class="value mono">'+(last.tasa_pesos_ponderada!=null?fmtPct.format(last.tasa_pesos_ponderada)+'%':'—')+'</div>'
+      + '<div class="unit">'+PLABEL[last.periodo]+', TNA</div>';
+    wrap.appendChild(t1);
+
+    const t2 = document.createElement('div'); t2.className='tile';
+    t2.innerHTML = '<div class="label">Tasa ponderada · dólares</div>'
+      + '<div class="value mono">'+(last.tasa_dolares_ponderada!=null?fmtPct.format(last.tasa_dolares_ponderada)+'%':'—')+'</div>'
+      + '<div class="unit">'+PLABEL[last.periodo]+', TNA</div>';
+    wrap.appendChild(t2);
+
+    const t3 = document.createElement('div'); t3.className='tile';
+    if(last.costo_efectivo_dolares!=null && last.tasa_pesos_ponderada!=null){
+      const convienePesos = last.tasa_pesos_ponderada <= last.costo_efectivo_dolares;
+      t3.innerHTML = '<div class="label">Costo efectivo · dólares</div>'
+        + '<div class="value mono">'+fmtPct.format(last.costo_efectivo_dolares)+'%</div>'
+        + '<span class="chip '+(convienePesos?'bad':'good')+'">'+(convienePesos?'▲ convino pesos':'▼ convino dólares')+'</span>';
+    } else {
+      t3.innerHTML = '<div class="label">Costo efectivo · dólares</div><div class="value mono">—</div><div class="unit">falta TC de hace 12 meses</div>';
+    }
+    wrap.appendChild(t3);
+  }
+
+  function renderResumenTasaChart(){
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const rnVisible = RN.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const pesos = rnVisible.map(r=>r.tasa_pesos_ponderada);
+    const dolares = rnVisible.map(r=>r.tasa_dolares_ponderada);
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--accent').trim();
+    const gold = styles.getPropertyValue('--gold').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('resumenTasaChart').getContext('2d');
+    if(resumenTasaChart) resumenTasaChart.destroy();
+    resumenTasaChart = new Chart(ctx, {
+      type:'bar',
+      data:{ labels, datasets:[
+        { label:'Pesos', data: pesos, backgroundColor: accent, borderRadius:5, maxBarThickness:34 },
+        { label:'Dólares', data: dolares, backgroundColor: gold, borderRadius:5, maxBarThickness:34 },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+(c.raw!=null?fmtPct.format(c.raw)+'%':'sin dato') } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' }, beginAtZero:true }
+        }
+      }
+    });
+    const legendEl = document.getElementById('resumenTasaLegend');
+    legendEl.innerHTML =
+      '<span class="toggle" data-idx="0"><i style="background:'+accent+'"></i>Pesos</span>'
+      + '<span class="toggle" data-idx="1"><i style="background:'+gold+'"></i>Dólares</span>';
+    legendEl.querySelectorAll('.toggle').forEach(function(el){
+      el.onclick = function(){
+        const idx = Number(el.dataset.idx);
+        const visible = resumenTasaChart.isDatasetVisible(idx);
+        resumenTasaChart.setDatasetVisibility(idx, !visible);
+        resumenTasaChart.update();
+        el.classList.toggle('off', visible);
+      };
+    });
+
+    const jun25 = RN.find(r=>r.periodo===20250630);
+    const checkEl = document.getElementById('checkPesosJun25');
+    if(checkEl) checkEl.textContent = jun25 && jun25.tasa_pesos_ponderada!=null ? fmtPct.format(jun25.tasa_pesos_ponderada)+'%' : 'sin dato';
+  }
+
+  function renderDiffChart(){
+    const idx = state.rangeEnd;
+    const per = PERIODOS[idx];
+    const rn = RN[idx];
+    document.getElementById('diffDesc').innerHTML = 'Tasa en pesos de cada actividad, menos la tasa ponderada nacional ('+(rn&&rn.tasa_pesos_ponderada!=null?fmtPct.format(rn.tasa_pesos_ponderada)+'%':'—')+') en <b>'+PLABEL[per]+'</b>. En puntos porcentuales.';
+
+    const rows = DATA.actividades.map(act=>{
+      const t = act.tasas[idx];
+      if(!rn || rn.tasa_pesos_ponderada==null || !t || t.pesos==null) return null;
+      return { nombre: act.nombre, diff: t.pesos - rn.tasa_pesos_ponderada };
+    }).filter(Boolean);
+    rows.sort((a,b)=>b.diff-a.diff);
+
+    const styles = getComputedStyle(document.documentElement);
+    const badColor = styles.getPropertyValue('--bad-text').trim();
+    const goodColor = styles.getPropertyValue('--good-text').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('diffChart').getContext('2d');
+    if(diffChart) diffChart.destroy();
+    diffChart = new Chart(ctx, {
+      type:'bar',
+      data:{ labels: rows.map(r=>r.nombre), datasets:[{
+        data: rows.map(r=>r.diff),
+        backgroundColor: rows.map(r=> r.diff>=0 ? badColor : goodColor),
+        borderRadius: 4,
+        maxBarThickness: 22,
+      }]},
+      options:{
+        indexAxis:'y',
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> (c.raw>=0?'+':'')+fmt1.format(c.raw)+' pp vs. el promedio' } } },
+        scales:{
+          x:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> (v>=0?'+':'')+v } },
+          y:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } }
+        }
+      }
+    });
+  }
+
+  function renderCostoChart(){
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const rnVisible = RN.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const pesos = rnVisible.map(r=>r.tasa_pesos_ponderada);
+    const costoUsd = rnVisible.map(r=>r.costo_efectivo_dolares);
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--accent').trim();
+    const gold = styles.getPropertyValue('--gold').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('costoChart').getContext('2d');
+    if(costoChart) costoChart.destroy();
+    costoChart = new Chart(ctx, {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'Crédito en pesos (tasa ponderada)', data: pesos, borderColor: accent, backgroundColor: accent, tension:.25, pointRadius:2, spanGaps:false },
+        { label:'Crédito en dólares, costo efectivo en pesos', data: costoUsd, borderColor: gold, backgroundColor: gold, tension:.25, pointRadius:2, spanGaps:false },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+(c.raw!=null?fmtPct.format(c.raw)+'%':'sin dato') } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11}, maxRotation:0, autoSkip:true } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' } }
+        }
+      }
+    });
+    const legendEl = document.getElementById('costoLegend');
+    legendEl.innerHTML =
+      '<span><i style="background:'+accent+'"></i>Crédito en pesos</span>'
+      + '<span><i style="background:'+gold+'"></i>Crédito en dólares (costo efectivo en pesos)</span>';
+  }
+
+  function renderResumenView(){
+    renderResumenTiles();
+    renderResumenTasaChart();
+    renderDiffChart();
+    renderCostoChart();
+  }
+
   function syncPills(){
     renderPills(document.getElementById('actSidebar'), pillClicked);
   }
@@ -312,6 +541,7 @@
     if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
   }
   function renderAll(){
+    if(state.tab==='resumen'){ renderResumenView(); return; }
     syncPills();
     if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
   }

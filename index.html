@@ -25,13 +25,28 @@
 <nav class="tabs" id="tabsNav">
   <button data-tab="saldos" class="active">Saldos</button>
   <button data-tab="tasas">Tasas</button>
+  <button data-tab="resumen">Resumen</button>
 </nav>
 
-<main>
+<main id="mainGrid">
 
   <aside class="sidebar" id="actSidebar"></aside>
 
   <div class="content">
+
+  <div class="panel rangepanel">
+    <div class="rangehead">
+      <h2>Ventana de tiempo</h2>
+      <div class="rangevalue mono" id="rangeValueLabel">—</div>
+    </div>
+    <div class="desc">Arrastrá los extremos para acotar el período que se ve en los gráficos.</div>
+    <div class="rangeslider">
+      <div class="rangetrack"><div class="rangefill" id="rangeFill"></div></div>
+      <input type="range" id="rangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
+      <input type="range" id="rangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
+    </div>
+  </div>
+
   <div id="view-saldos">
 
     <div class="toolbar">
@@ -102,6 +117,34 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="view-resumen" style="display:none;">
+
+    <div class="desc" style="margin-bottom:14px;">Panorama nacional: combina las 12 actividades, ponderando cada una por su peso relativo dentro del crédito total de cada trimestre.</div>
+
+    <div class="tiles" id="resumenTiles"></div>
+
+    <div class="panel">
+      <h2>Tasa ponderada nacional por trimestre</h2>
+      <div class="desc">Promedio de la tasa de cada actividad, ponderado por su participación en el saldo total de esa moneda. Metodología replicada del informe de CONINAGRO (valida contra Jun-25: 49,3% publicado vs. <span id="checkPesosJun25">—</span> calculado acá).</div>
+      <div class="legend" id="resumenTasaLegend"></div>
+      <div class="chartwrap"><canvas id="resumenTasaChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Diferencial de cada actividad vs. el promedio ponderado</h2>
+      <div class="desc" id="diffDesc">Tasa en pesos de cada actividad, menos la tasa ponderada nacional del mismo trimestre. En puntos porcentuales.</div>
+      <div class="chartwrap" style="height:320px;"><canvas id="diffChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Costo efectivo: crédito en dólares vs. en pesos</h2>
+      <div class="desc">Compara la tasa ponderada en pesos contra el costo, llevado a pesos, de tomar crédito en dólares (tasa ponderada en dólares combinada con la devaluación de los últimos 12 meses). No hay dato en los primeros 4 trimestres de la serie, porque hace falta el tipo de cambio de un año atrás.</div>
+      <div class="legend" id="costoLegend"></div>
+      <div class="chartwrap"><canvas id="costoChart"></canvas></div>
+    </div>
+
   </div>
   </div>
 

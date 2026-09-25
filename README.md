@@ -161,6 +161,73 @@ mostraría igual el gráfico, las tiles y la tabla de provincia en la vista
 vistas Pesos/Dólares (avisándolo) y mostraría el aviso de dato parcial en
 la pestaña Tasas, sin tocar código.
 
+## Pestaña "Resumen": tasa ponderada, diferencial y pesos vs. dólares
+
+A partir del informe "Crédito al sector agropecuario" que CONINAGRO publica
+cada semestre, se sumó una tercera pestaña con tres vistas a nivel nacional
+(no por actividad):
+
+1. **Tasa ponderada nacional**: el promedio de la tasa de cada actividad,
+   ponderado por el peso de esa actividad sobre el saldo total *de esa
+   misma moneda* en el trimestre (pesos pondera con saldo en pesos,
+   dólares con saldo en dólares — no es la misma ponderación, porque la
+   composición por moneda no es igual en cada actividad). Se calcula en
+   `build_resumen_nacional()` (`scripts/build_data.py`) y queda en
+   `resumen_nacional` en el JSON, no se recalcula en el navegador.
+   Metodología validada contra el propio informe de CONINAGRO: para Jun-25
+   (el único trimestre que compartimos con su informe de Jun-26), la tasa
+   ponderada en pesos que da nuestra cuenta es 48,95%-49,0% según la base
+   de ponderación exacta que se use (se probaron tres: saldo en pesos,
+   saldo total en pesos, saldo total en dólares — las tres coinciden entre
+   sí a menos de 0,1 punto), contra el 49,3% que publica CONINAGRO. La
+   pequeña diferencia (~0,3 puntos) es esperable por redondeos y por cómo
+   corta cada uno el dato; se considera una validación exitosa. El dashboard
+   muestra esta comparación en la propia vista, para que quede a la vista
+   si alguna vez se desalinea.
+2. **Diferencial de cada actividad vs. el promedio ponderado**: se calcula
+   en el navegador (resta simple, `app.js`), no hace falta guardarlo en el
+   JSON. Usa como referencia el trimestre que está en el extremo derecho
+   del slider de ventana de tiempo (ver debajo), no siempre el último dato
+   publicado.
+3. **Costo efectivo: crédito en dólares vs. en pesos**: combina la tasa
+   ponderada en dólares con la devaluación interanual (4 trimestres) del
+   tipo de cambio, para poder comparar el costo de un crédito en dólares
+   contra uno en pesos en igualdad de condiciones — la misma cuenta que
+   hace CONINAGRO en su informe, pero calculada para toda la serie
+   histórica en vez de un solo período. No hay dato en los primeros 4
+   trimestres (2015) porque no hay tipo de cambio de "hace un año" contra
+   el cual compararlos.
+
+`build_resumen_nacional()` también valida que el tipo de cambio de la
+columna `TC` sea el mismo para todas las actividades de un mismo trimestre
+(tiene que serlo, es el TC oficial nacional) y corta con un error si no
+-- la misma filosofía de "frenar antes que guardar un dato mal calculado"
+que ya usa el resto del script.
+
+## Slider de ventana de tiempo
+
+El control "Ventana de tiempo", arriba de cada pestaña, filtra qué
+trimestres se ven en todos los gráficos (Saldos, Tasas y Resumen) sin
+alterar los datos ni la tabla de provincias, que siguen mostrando siempre
+el último dato disponible. También cambia la referencia de la tile
+"Variación del período" (compara el extremo izquierdo del slider contra el
+derecho, no siempre Mar-15 contra el último dato) y, en la pestaña Resumen,
+el trimestre de referencia del gráfico de diferencial. Es 100% client-side
+(`app.js`), no requiere tocar el JSON.
+
+## Formato de montos chicos
+
+Antes, cualquier saldo se mostraba siempre en millones de dólares/pesos con
+un decimal, así que un saldo por debajo de los USD 50 mil (común en el
+desglose por provincia de una actividad chica) se veía como "US$ 0,0 M" --
+un valor que existe pero no se puede leer. `fmtMillones()` en `app.js`
+ahora elige la escala según la magnitud: millones si el valor supera el
+millón, miles si supera los mil, y el número plano si es menor. El eje Y
+del gráfico de evolución de saldo hace lo mismo, pero a nivel de todo el
+gráfico (no puede haber dos escalas distintas en un mismo eje): elige
+miles o millones según el valor más alto que haya que graficar en la
+ventana de tiempo seleccionada.
+
 ## Actualizar con un trimestre nuevo
 
 1. Sumá el Excel nuevo en `data/source/` (formato limpio `.xlsx` o crudo
