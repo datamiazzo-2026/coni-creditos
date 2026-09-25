@@ -392,7 +392,10 @@
   const RN = DATA.resumen_nacional || [];
 
   function renderResumenTiles(){
-    const last = RN[RN.length-1];
+    // Igual que el resto de la vista Resumen (ver renderDiffChart): la tarjeta
+    // muestra el dato del extremo derecho de la ventana elegida en el slider,
+    // no siempre el último trimestre de toda la serie.
+    const last = RN[state.rangeEnd];
     const wrap = document.getElementById('resumenTiles');
     wrap.innerHTML='';
     if(!last){ return; }
