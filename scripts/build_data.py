@@ -38,6 +38,23 @@ Convención de MONEDA (misma en ambos formatos):
     saldo real en dólares de una fila se divide su TOTAL por el TIPO DE
     CAMBIO de esa misma fila.
 
+UNIDAD de los montos de SALDOS: el "crudo BCRA" viene en MILES DE PESOS
+(la propia hoja lo dice: "TOTAL LOANS - Balances in thousands pesos (1)",
+así en los 12 archivos fuente 2015-2026) -- `read_raw_bcra_sheet` lo
+corrige con `unit_multiplier=1000` antes de guardar nada, validando esa
+leyenda primero (`_validate_units_label`). Este dashboard mostró todos los
+saldos 1000 veces más chicos de lo real hasta que se detectó comparando el
+total nacional contra el informe de CONINAGRO (nuestro cálculo daba
+US$ 12,3 millones para Jun-26 contra los US$ 12.303 millones que publica
+CONINAGRO para ese mismo trimestre) -- ningún chequeo interno (provincias
+que suman el total, TC consistente entre actividades) detecta un factor de
+escala uniforme aplicado a todos los montos por igual, así que si se agrega
+un formato de fuente nuevo hay que confirmar a mano en qué unidad viene el
+total antes de asumir que es la misma. El formato "limpio" (.xlsx) no está
+en uso actualmente (no hay archivos .xlsx en data/source/); si se vuelve a
+usar, confirmá primero si sus montos ya vienen en pesos o también en miles
+antes de darlo por hecho.
+
 Si en un trimestre nuevo aparece alguna actividad que hoy está en la lista
 de "parciales" (PARTIAL_ACTS) con series completas, simplemente pasa a
 completarse sola: el script arma la serie con lo que encuentre fila a fila,
@@ -256,7 +273,33 @@ def _validate_prov_columns(ws, prov_cols, header_rows):
             )
 
 
-def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, check_sum=False, round_values=True):
+def _validate_units_label(ws, needles=('thousand', 'miles')):
+    """El BCRA declara la unidad del total en el título de la hoja, en las
+    primeras filas (ej.: "TOTAL LOANS - Balances in thousands pesos (1)").
+    Antes de aplicar `unit_multiplier` a ciegas, confirmamos que esa leyenda
+    siga diciendo lo que esperamos -- así, si el BCRA alguna vez cambia de
+    unidad (por ejemplo, pasa a informar directamente en pesos), el script
+    frena en vez de arrastrar el error en silencio. Esto es exactamente lo
+    que pasó antes de este chequeo: el dashboard mostró todos los saldos
+    1000 veces más chicos de lo real durante meses, porque nada lo
+    validaba -- ni el chequeo de que las provincias sumen el total (`check_sum`)
+    ni el de tipo de cambio consistente detectan un factor de escala
+    UNIFORME aplicado a todos los montos por igual."""
+    for r in range(0, 6):
+        for c in range(ws.ncols):
+            v = ws.cell_value(r, c)
+            if isinstance(v, str) and any(n in v.lower() for n in needles):
+                return
+    raise ValueError(
+        "No encontré la leyenda de unidades ('thousands'/'miles') en las "
+        "primeras 6 filas de la hoja. El BCRA puede haber cambiado la unidad "
+        "del total -- confirmá a mano antes de asumir que sigue en miles de "
+        "pesos (ver `unit_multiplier` en read_raw_bcra_workbook)."
+    )
+
+
+def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, check_sum=False,
+                         round_values=True, unit_multiplier=1):
     """Lee la hoja cruda del BCRA y devuelve solo las filas de las 12
     actividades agro (ACT_NAMES), en el mismo formato de record que
     read_clean_sheet: {'actividad','periodo','moneda','total','provincias'[,'tc']}.
@@ -268,7 +311,22 @@ def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, chec
 
     round_values redondea total/provincias a entero -- tiene sentido para
     SALDOS (son pesos) pero NO para TASAS (son tasas en %, con decimales
-    significativos: 49.32% no es lo mismo que 49%)."""
+    significativos: 49.32% no es lo mismo que 49%).
+
+    unit_multiplier corrige la unidad real del dato: la hoja de SALDOS del
+    BCRA crudo viene en MILES DE PESOS, no en pesos (el título de la hoja
+    lo dice explícitamente: "TOTAL LOANS - Balances in thousands pesos
+    (1)", igual en los 12 archivos fuente 2015-2026). Se valida con
+    `_validate_units_label` antes de aplicarlo, para no repetir a ciegas
+    el bug que esto corrige (ver CHANGELOG / README): durante meses el
+    dashboard mostró todos los saldos (tiles, gráfico, mapa por provincia,
+    resumen nacional) 1000 veces más chicos de lo real -- por ejemplo, el
+    total nacional de Jun-26 daba US$ 12,3 millones en vez de los
+    US$ 12.303 millones que publica CONINAGRO en su propio informe para
+    ese mismo trimestre. TASAS no usa este parámetro (son tasas en %, no
+    hay unidad que corregir)."""
+    if unit_multiplier != 1:
+        _validate_units_label(ws)
     _validate_prov_columns(ws, prov_cols, header_rows)
     header_row = _find_header_row(ws)
     name_cols = [4, 5, 6, 7, 8]  # nom01..nom05
@@ -287,13 +345,14 @@ def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, chec
         if per == '' or mon == '':
             continue
         total = ws.cell_value(r, total_col)
-        total = total if isinstance(total, (int, float)) else None
+        total = (total * unit_multiplier) if isinstance(total, (int, float)) else None
         provs = {}
         for p, c in prov_cols.items():
             v = ws.cell_value(r, c)
             if not isinstance(v, (int, float)):
                 provs[p] = None
             else:
+                v = v * unit_multiplier
                 provs[p] = round(v) if round_values else v
         rec = {'actividad': act, 'periodo': int(per), 'moneda': int(mon),
                'total': (round(total) if round_values else total) if total is not None else None,
@@ -350,7 +409,8 @@ def read_raw_bcra_workbook(path):
     header_rows_tasas = range(17, 25)
 
     saldos = read_raw_bcra_sheet(sh_saldos, total_col=12, prov_cols=saldos_prov_cols,
-                                  header_rows=header_rows_saldos, tc_col=11, check_sum=True)
+                                  header_rows=header_rows_saldos, tc_col=11, check_sum=True,
+                                  unit_multiplier=1000)
     tasas = read_raw_bcra_sheet(sh_tasas, total_col=11, prov_cols=tasas_prov_cols,
                                  header_rows=header_rows_tasas, tc_col=None, round_values=False)
     return saldos, tasas
