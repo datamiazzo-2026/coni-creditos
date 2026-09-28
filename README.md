@@ -212,17 +212,50 @@ y Resumen). También recalcula, en vivo, todo lo que depende de "qué
 trimestre estamos mirando": la tile "Variación del período" (compara el
 extremo izquierdo del slider contra el derecho, no siempre Mar-15 contra
 el último dato), la tile "Mix por moneda" (promedio ponderado por saldo de
-todos los trimestres visibles, no solo el último), el mapa + ranking por
-provincia de Saldos y de Tasas (ver más abajo) y, en la pestaña Resumen,
-las tres tiles de tasa/costo efectivo y el trimestre de referencia del
-gráfico de diferencial. Todos estos usan el extremo **derecho** de la
-ventana elegida (`state.rangeEnd`) como "el trimestre actual" -- si el
-slider está en su posición default (todo el rango), coincide con el
-último dato disponible; si se lo acota, por ejemplo hasta Mar-25, todos
-esos elementos pasan a mostrar Mar-25. Es 100% client-side (`app.js`), no
-requiere tocar el JSON. Un mismo `<div class="rangepanel">` se reubica
-entre pestañas con `moveRangeSlider()` (`appendChild` a
-`#rangeSlot-<tab>`) en vez de duplicarse.
+todos los trimestres visibles, no solo el último), la tile "Participación
+en el crédito agro" y las cuatro tiles de la pestaña Tasas (ver más
+abajo), el mapa + ranking por provincia de Saldos y de Tasas (ver más
+abajo) y, en la pestaña Resumen, las tres tiles de tasa/costo efectivo y
+el trimestre de referencia del gráfico de diferencial. Todos estos usan
+el extremo **derecho** de la ventana elegida (`state.rangeEnd`) como "el
+trimestre actual" -- si el slider está en su posición default (todo el
+rango), coincide con el último dato disponible; si se lo acota, por
+ejemplo hasta Mar-25, todos esos elementos pasan a mostrar Mar-25. Es
+100% client-side (`app.js`), no requiere tocar el JSON. Un mismo
+`<div class="rangepanel">` se reubica entre pestañas con
+`moveRangeSlider()` (`appendChild` a `#rangeSlot-<tab>`) en vez de
+duplicarse.
+
+## Tarjetas (tiles) de Saldos y Tasas
+
+**Saldos** (`renderTiles()`): la cuarta tile, antes "Cobertura de datos"
+(cuántos de los 46 trimestres tenían dato -- un número que no decía mucho
+sobre la actividad en sí), ahora es **"Participación en el crédito agro"**:
+qué porcentaje del saldo total agropecuario (las 12 actividades
+combinadas, `resumen_nacional[i].total_ars_nacional`) representa el saldo
+total de la actividad elegida, en el trimestre del extremo derecho de la
+ventana elegida. `resumen_nacional` está alineado 1 a 1 por índice con
+`periodos`/`series`, así que se indexa con el mismo `state.rangeEnd` que
+el resto de las tiles. A diferencia de cobertura (un dato sobre la
+calidad de la serie), esta tile conecta la actividad puntual con el
+panorama general -- p. ej. Cereales/oleaginosas/forraje pesa ~41% del
+crédito agro total en Jun-26, mientras que Tabaco apenas ~0,2%.
+
+**Tasas** (`renderTasaTiles()`, nuevo): cuatro tiles arriba del gráfico
+"Tasa nacional por trimestre", todas de la actividad elegida en el
+trimestre del extremo derecho de la ventana:
+
+- Tasa nacional en pesos y tasa nacional en dólares del trimestre actual
+  (`act.tasas[state.rangeEnd]`).
+- Variación de la tasa en pesos y en dólares **contra el trimestre
+  inmediato anterior** (`act.tasas[state.rangeEnd-1]`) -- a diferencia de
+  la tile "Variación del período" de Saldos, que compara contra el
+  extremo izquierdo de la ventana, acá siempre es trimestre a trimestre,
+  independientemente de dónde esté el otro extremo del slider. Si no hay
+  dato en el trimestre anterior (por ejemplo, en el primer trimestre de
+  toda la serie) la tile muestra "--" en vez de una variación inventada.
+  Una suba de tasa se marca en rojo (crédito más caro) y una baja en
+  verde, mismo criterio de color que la tile "Costo efectivo" de Resumen.
 
 ## Mapa de saldo (y de tasa) por provincia
 

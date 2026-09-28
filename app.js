@@ -238,13 +238,26 @@
     }
     wrap.appendChild(tileMezcla);
 
-    const tileCobertura = document.createElement('div');
-    tileCobertura.className='tile';
-    const nTrim = series.filter(s=>s).length;
-    tileCobertura.innerHTML = '<div class="label">Cobertura de datos</div>'
-      + '<div class="value mono">'+nTrim+' / '+PERIODOS.length+'</div>'
-      + '<div class="unit">'+(act.saldos_total_completo ? 'trimestres con dato' : 'trimestres con saldo total')+'</div>';
-    wrap.appendChild(tileCobertura);
+    // Participación de esta actividad dentro del crédito agro total (las 12
+    // actividades combinadas), en el trimestre del extremo derecho de la
+    // ventana elegida -- mismo criterio de "período actual" que el resto de
+    // las tarjetas y paneles. Usa el total nacional de resumen_nacional, que
+    // está alineado 1 a 1 por índice con PERIODOS/series.
+    const tileParticip = document.createElement('div');
+    tileParticip.className='tile';
+    const perP = PERIODOS[state.rangeEnd];
+    const sActP = act.series[state.rangeEnd];
+    const rnP = RN[state.rangeEnd];
+    if(sActP && sActP.total_ars!=null && rnP && rnP.total_ars_nacional){
+      const share = sActP.total_ars/rnP.total_ars_nacional*100;
+      tileParticip.innerHTML = '<div class="label">Participación en el crédito agro</div>'
+        + '<div class="value mono">'+fmtPct.format(share)+'%</div>'
+        + '<div class="unit">del total de las 12 actividades en '+PLABEL[perP]+'</div>';
+    } else {
+      tileParticip.innerHTML = '<div class="label">Participación en el crédito agro</div>'
+        + '<div class="value mono">—</div><div class="unit">sin dato de saldo total en '+PLABEL[perP]+'</div>';
+    }
+    wrap.appendChild(tileParticip);
   }
 
   function renderChart(act){
@@ -546,6 +559,54 @@
     });
   }
 
+  // Tarjetas de la pestaña Tasas: muestran la tasa nacional (de la actividad
+  // elegida) en el trimestre del extremo derecho de la ventana del slider, en
+  // pesos y en dólares, más la variación contra el trimestre INMEDIATO
+  // anterior (no contra el inicio de la ventana -- a diferencia de la tarjeta
+  // "Variación del período" de Saldos, acá interesa el movimiento trimestre a
+  // trimestre). Una tasa que sube se marca en rojo (crédito más caro) y una
+  // que baja en verde, igual criterio que la tarjeta "Costo efectivo" de
+  // Resumen.
+  function renderTasaTiles(act){
+    const idx = state.rangeEnd;
+    const per = PERIODOS[idx];
+    const cur = act.tasas[idx];
+    const prev = idx>0 ? act.tasas[idx-1] : null;
+
+    const wrap = document.getElementById('tasaTiles');
+    wrap.innerHTML = '';
+
+    const tPesos = document.createElement('div'); tPesos.className='tile';
+    tPesos.innerHTML = '<div class="label">Tasa nacional · pesos</div>'
+      + '<div class="value mono">'+(cur && cur.pesos!=null ? fmtPct.format(cur.pesos)+'%' : '—')+'</div>'
+      + '<div class="unit">'+PLABEL[per]+', TNA</div>';
+    wrap.appendChild(tPesos);
+
+    const tDolares = document.createElement('div'); tDolares.className='tile';
+    tDolares.innerHTML = '<div class="label">Tasa nacional · dólares</div>'
+      + '<div class="value mono">'+(cur && cur.dolares!=null ? fmtPct.format(cur.dolares)+'%' : '—')+'</div>'
+      + '<div class="unit">'+PLABEL[per]+', TNA</div>';
+    wrap.appendChild(tDolares);
+
+    function varTile(label, curVal, prevVal, prevPeriodo){
+      const tile = document.createElement('div'); tile.className='tile';
+      let html = '<div class="label">'+label+'</div>';
+      if(curVal!=null && prevVal!=null){
+        const diff = curVal-prevVal;
+        const subio = diff>0, bajo = diff<0;
+        const arrow = subio ? '▲ subió' : (bajo ? '▼ bajó' : '= sin cambios');
+        html += '<div class="value mono">'+(diff>=0?'+':'')+fmt1.format(diff)+' pp</div>'
+          + '<span class="chip '+(subio?'bad':'good')+'">'+arrow+' vs '+PLABEL[prevPeriodo]+'</span>';
+      } else {
+        html += '<div class="value mono">—</div><div class="unit">sin dato del trimestre anterior</div>';
+      }
+      tile.innerHTML = html;
+      return tile;
+    }
+    wrap.appendChild(varTile('Variación tasa · pesos', cur && cur.pesos, prev && prev.pesos, prev && prev.periodo));
+    wrap.appendChild(varTile('Variación tasa · dólares', cur && cur.dolares, prev && prev.dolares, prev && prev.periodo));
+  }
+
   function renderTasasView(){
     const act = getAct(state.actId);
     const noteEl = document.getElementById('partialNoteTasas');
@@ -561,6 +622,7 @@
     } else {
       noteEl.style.display = 'none';
     }
+    renderTasaTiles(act);
     renderTasaChart(act);
     renderTasaProvinceMap(act);
   }
