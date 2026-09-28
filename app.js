@@ -13,10 +13,15 @@
   const fmtPct = new Intl.NumberFormat('es-AR', {maximumFractionDigits:1, minimumFractionDigits:1});
   const fmtInt = new Intl.NumberFormat('es-AR', {maximumFractionDigits:0});
 
-  // Elige la escala (millones / miles / unidad) según la magnitud del valor,
-  // para que un monto chico (ej. el saldo de una provincia con poco crédito)
-  // no se vea siempre como "0,0 M".
+  // Elige la escala (mil millones / millones / miles / unidad) según la
+  // magnitud del valor, para que un monto chico (ej. el saldo de una
+  // provincia con poco crédito) no se vea siempre como "0,0 M". El tramo
+  // "MM" (mil millones, convención financiera argentina) hace falta desde
+  // que se corrigió el bug de unidad de SALDOS (ver build_data.py): los
+  // totales nacionales y de las actividades más grandes ahora entran en
+  // los billones de pesos (miles de millones), no solo en millones.
   function pickScale(maxAbs){
+    if(maxAbs >= 1e9) return {div:1e9, suf:' MM'};
     if(maxAbs >= 1e6) return {div:1e6, suf:' M'};
     if(maxAbs >= 1e3) return {div:1e3, suf:' K'};
     return {div:1, suf:''};

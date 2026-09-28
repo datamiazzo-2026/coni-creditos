@@ -64,6 +64,44 @@ la tasa nacional tal cual la reporta la fuente (columna `TOTAL`) — el
 dashboard no calcula ningún promedio ni ponderación propia, solo la
 muestra.
 
+### ⚠️ Corrección: los montos de SALDOS venían en miles de pesos
+
+Hasta que se corrigió, `build_data.py` tomaba la columna `TOTAL` de
+`SALDOS` (y el desglose por provincia) como si estuviera en pesos. En
+realidad, la hoja `Saldos` del crudo BCRA la declara explícitamente en su
+título: **"TOTAL LOANS - Balances in thousands pesos (1)"** — está en
+**miles de pesos**, igual en los 12 archivos fuente (2015 a 2026). El
+resultado: todos los montos del dashboard (tiles de saldo, gráfico de
+evolución, mapa y ranking por provincia) se mostraban **1.000 veces más
+chicos** que el valor real.
+
+Se detectó comparando el total nacional de crédito agro que calcula este
+dashboard contra el que publica CONINAGRO en su propio informe: para
+Jun-26, acá daba US$ 12,3 *millones* contra los US$ 12.303 *millones* que
+publica CONINAGRO para ese mismo trimestre — una diferencia de exactamente
+tres ceros. Ningún chequeo interno lo detectaba porque ninguno mira la
+magnitud absoluta: `check_sum` valida que las provincias sumen el total de
+su fila (una razón entre magnitudes, no un valor absoluto) y la validación
+de tipo de cambio compara TCs entre actividades del mismo trimestre — un
+factor de escala aplicado por igual a *todos* los montos pasa ambos
+chequeos sin problema.
+
+**Corrección**: `read_raw_bcra_sheet()` ahora multiplica por 1000 el
+`TOTAL` y el desglose por provincia de `SALDOS` (`unit_multiplier=1000`),
+validando primero que la leyenda "thousands"/"miles" siga apareciendo en
+las primeras filas de la hoja (`_validate_units_label`) — así, si el BCRA
+cambia de unidad en un export futuro, el script frena con un error en vez
+de repetir el mismo error en silencio. `TASAS` no se toca (son tasas en %,
+no hay unidad que corregir) y las tasas ponderadas de la pestaña Resumen
+tampoco cambiaron (son un promedio ponderado por saldo: multiplicar todos
+los pesos por la misma constante no cambia el resultado).
+
+`dashboard_data.json` se regeneró con la corrección y se volvió a validar
+contra los Excel fuente de punta a punta (provincias que suman el total en
+las 552 combinaciones actividad×trimestre con dato, `pesos + dólares×TC =
+total` en las mismas 552, y el total nacional recalculado independientemente
+con pandas para los 46 trimestres) antes de subirlo.
+
 ### Ojo con las columnas al actualizar el Excel
 
 **Formato limpio:** `SALDOS` tiene una columna `TIPO DE CAMBIO` entre
@@ -184,6 +222,20 @@ cada semestre, se sumó una tercera pestaña con tres vistas a nivel nacional
    corta cada uno el dato; se considera una validación exitosa. El dashboard
    muestra esta comparación en la propia vista, para que quede a la vista
    si alguna vez se desalinea.
+
+   **Pendiente/a monitorear**: para Jun-26 (el trimestre más reciente),
+   CONINAGRO publica 52,4% en pesos y 5,7% en dólares; este dashboard
+   calcula 47,3% y 5,0% respectivamente -- una diferencia de ~5 puntos en
+   pesos y ~0,7 puntos en dólares, bastante mayor que la de Jun-25. La
+   metodología de ponderación es la misma que ya validó bien contra Jun-25,
+   así que no parece un error propio; es más probable que la fuente de
+   CONINAGRO para Jun-26 use un corte de datos distinto (más entidades
+   informantes, un mes de cierre distinto dentro del trimestre, etc.). En
+   cambio, el **total nacional de crédito** (no la tasa) sí valida
+   perfecto: para Jun-26 este dashboard da US$ 12.303,6 millones contra los
+   US$ 12.303 millones que publica CONINAGRO -- una diferencia de 0,005%.
+   Vale la pena revisar esto cuando CONINAGRO actualice su informe con un
+   trimestre más.
 2. **Diferencial de cada actividad vs. el promedio ponderado**: se calcula
    en el navegador (resta simple, `app.js`), no hace falta guardarlo en el
    JSON. Usa como referencia el trimestre que está en el extremo derecho
@@ -357,12 +409,15 @@ Antes, cualquier saldo se mostraba siempre en millones de dólares/pesos con
 un decimal, así que un saldo por debajo de los USD 50 mil (común en el
 desglose por provincia de una actividad chica) se veía como "US$ 0,0 M" --
 un valor que existe pero no se puede leer. `fmtMillones()` en `app.js`
-ahora elige la escala según la magnitud: millones si el valor supera el
-millón, miles si supera los mil, y el número plano si es menor. El eje Y
-del gráfico de evolución de saldo hace lo mismo, pero a nivel de todo el
-gráfico (no puede haber dos escalas distintas en un mismo eje): elige
-miles o millones según el valor más alto que haya que graficar en la
-ventana de tiempo seleccionada.
+ahora elige la escala según la magnitud: mil millones ("MM"), millones
+("M"), miles ("K") o el número plano, de mayor a menor según corresponda.
+El eje Y del gráfico de evolución de saldo hace lo mismo, pero a nivel de
+todo el gráfico (no puede haber dos escalas distintas en un mismo eje):
+elige la escala según el valor más alto que haya que graficar en la
+ventana de tiempo seleccionada. El tramo "MM" se agregó junto con la
+corrección de unidad de SALDOS (ver más arriba): con los montos ×1000, el
+total nacional y las actividades más grandes ya entran en los miles de
+millones de pesos, no solo en millones.
 
 ## Actualizar con un trimestre nuevo
 
