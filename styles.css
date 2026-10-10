@@ -12,6 +12,22 @@
     --tab-active:#0F3D30;
     --radius-sm:8px; --radius-md:10px; --radius-lg:12px;
     --shadow:0 1px 2px rgba(16,36,28,.06), 0 1px 1px rgba(16,36,28,.04);
+    /* Paleta categórica del gráfico de "Composición del crédito total de la
+       economía" (Resumen). 6 matices + un gris neutro para "Otros", elegidos
+       y validados con la skill de dataviz (node validate_palette.js) contra
+       la pérdida de daltonismo (protanopía/deuteranopía) Y contra visión
+       normal, en el orden exacto en que se dibujan como anillo de torta
+       (se chequeó también el par que cierra el anillo, última porción
+       contra la primera, no solo los pares consecutivos) -- nunca
+       reordenar estos 6 matices sin volver a correr el validador. "Otros"
+       reusa --text-faint a propósito (gris, no es un matiz más: así se ve
+       como lo que es, la porción residual, y no compite visualmente con
+       los sectores con nombre).
+       Orden del anillo: industria -> comercio -> agro -> construccion ->
+       personas -> servicios -> (vuelve a industria). */
+    --sector-industria:#2a78d6; --sector-comercio:#eb6834; --sector-agro:#1baf7a;
+    --sector-construccion:#eda100; --sector-personas:#e87ba4; --sector-servicios:#008300;
+    --sector-otros: var(--text-faint);
     color-scheme: light;
   }
   /* Tema siempre claro, igual al formato de monitordegranos.com.ar (no seguimos
@@ -28,6 +44,11 @@
     --bad-bg:#3A1B12; --bad-text:#FF9A76;
     --warn-bg:#3A2C13; --warn-text:#E7BE6D;
     --tab-active:#3FAE6C;
+    /* Mismos 6 matices, pasos para superficie oscura (ver nota en :root) --
+       también validados contra la superficie --surface de este modo. */
+    --sector-industria:#3987e5; --sector-comercio:#d95926; --sector-agro:#199e70;
+    --sector-construccion:#c98500; --sector-personas:#d55181; --sector-servicios:#008300;
+    --sector-otros: var(--text-faint);
     color-scheme: dark;
   }
 

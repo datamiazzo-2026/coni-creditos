@@ -806,6 +806,105 @@ corrección de unidad de SALDOS (ver más arriba): con los montos ×1000, el
 total nacional y las actividades más grandes ya entran en los miles de
 millones de pesos, no solo en millones.
 
+## Composición del crédito total de la economía, por sector (Resumen, Oct-2026)
+
+CONINAGRO pidió poder ver, en la pestaña Resumen, cómo el crédito al agro se
+compara con el crédito a **toda la economía** -- no solo entre las 21
+actividades agro que ya trackea el dashboard. Se agregó un panel nuevo,
+debajo de los que ya había, con una torta (donut) de la composición del
+crédito total por sector y un corredor de tiempo para recorrer los 46
+trimestres (Mar-15 a Jun-26) y ver cómo cambió esa composición.
+
+### Fuente de datos
+
+**No hizo falta ningún archivo nuevo.** Los 12 `.xls` crudos del BCRA que ya
+usa el dashboard (`data/source/PRESTAMOS_AL_SECTOR_AGRO_*_bcra_crudo.xls`)
+traen, además de las ~27 filas de detalle (Orden) que arman las 21
+actividades agro, filas de **DIVISIÓN** -- el nivel superior del árbol
+CIIU/CLANAE de actividades económicas -- con el total de crédito YA
+AGREGADO de cada división de la economía: Producción primaria, Industria
+manufacturera, Electricidad/gas/agua, Construcción, Comercio, Servicios,
+Personas físicas (créditos de consumo, no clasificados por actividad) y
+No identificada. No hace falta sumar nada a mano: esas filas vienen con su
+propio total ya calculado por el BCRA, en la misma hoja "Saldos" y con la
+misma estructura (Orden, fecha, moneda, total, provincias) que las filas de
+detalle. Se identifican por Orden BCRA (`SECTOR_ORDEN_LABELS` en
+`build_data.py`), con el mismo patrón defensivo que `ACTIVITIES`
+(`_validate_orden_labels` confirma el texto de cada fila antes de confiar en
+el número).
+
+### Por qué el crédito agro se parte en dos divisiones del BCRA
+
+El crédito agro que ya muestra el resto del dashboard (las 21 actividades)
+NO es una sola división del BCRA: cae dentro de **dos**. "Producción
+primaria" (Orden 4) incluye agricultura, ganadería, pesca Y minería --
+mientras que las 21 actividades agro no incluyen pesca ni minería.
+"Industria manufacturera" (Orden 45) incluye TODA la industria del país,
+mientras que las 21 actividades agro solo cuentan la industria
+agroalimentaria (lácteos, molinería, carnes, tabaco, madera). Si se usaran
+esas dos divisiones del BCRA tal cual junto con "Agro", el crédito
+agroindustrial quedaría contado dos veces.
+
+Por eso, para que las porciones de la torta sean mutuamente excluyentes y
+sumen exacto el total de la economía, cada una de esas dos divisiones se
+parte en dos al construir el JSON (`build_resumen_sectores()` en
+`build_data.py`): la parte que ya cuentan las 21 actividades de ACTIVITIES
+(restándole exactamente los mismos Orden que arman esas actividades, nunca
+una estimación) y el resto de esa división. "Agro" en el gráfico nuevo sale
+directamente de `total_ars_nacional` (el mismo campo que ya usa
+`resumen_nacional` para la tasa ponderada), no de una segunda suma aparte
+-- así es el mismo número exacto que el resto del dashboard, por
+construcción.
+
+**"Discrepancia estadística" (Orden 124) no es una división ni se suma al
+total**: se comprobó numéricamente, en los 46 trimestres de los 12 archivos
+fuente, que el "Total de actividades económicas" que declara el propio BCRA
+(Orden 125) ya coincide con la suma de las 8 divisiones solas (No
+identificada, Personas físicas, Producción primaria, Industria
+manufacturera, Electricidad/gas/agua, Construcción, Comercio, Servicios),
+con una diferencia relativa máxima de 2×10⁻⁸ (puro redondeo). Sumarle
+además la discrepancia rompe esa reconciliación -- queda afuera de la torta.
+
+### 9 sub-categorías en el JSON, 7 en el gráfico
+
+`dashboard_data.json` guarda las 9 sub-categorías sin agrupar
+(`resumen_sectores[i].sectores`: `agro`, `primaria_no_agro`,
+`industria_no_agro`, `electricidad_gas_agua`, `construccion`, `comercio`,
+`servicios`, `personas_fisicas`, `no_identificada`), para no perder
+granularidad en el dato. El frontend (`groupSectores()` en `app.js`) agrupa
+las 3 porciones más chicas y menos intuitivas para público general --
+`primaria_no_agro` (pesca + minería), `electricidad_gas_agua` y
+`no_identificada` -- en una sola porción "Otros", para que la torta se lea
+de un vistazo (7 porciones en vez de 9). Nunca se tocan los números, solo
+cómo se presentan.
+
+### Paleta de colores
+
+Las 6 porciones con nombre (Agro, Industria, Servicios, Comercio, Personas
+físicas, Construcción) usan una paleta categórica validada con la skill de
+dataviz (`node validate_palette.js`) contra confusión por daltonismo
+(protanopía/deuteranopía, simulación Machado-Oliveira-Fernandes) y contra
+visión normal, en el orden exacto en que se dibujan como anillo de torta
+(`--sector-*` en `styles.css`) -- incluyendo el par que cierra el anillo
+(última porción contra la primera), no solo los pares consecutivos, porque
+una torta es un anillo cerrado, no una fila. "Otros" usa un gris neutro
+(`--text-faint`, ya definido en la paleta del sitio) en vez de un séptimo
+matiz: al no tener saturación se distingue de cualquier color por
+desaturación, y visualmente se "retira" como lo que es, la porción
+residual, en vez de competir con los sectores con nombre. No reordenar los
+6 matices sin volver a correr el validador.
+
+### Verificación
+
+Se verificó de forma independiente (`independent_verify_sectores.py`,
+releyendo los 12 `.xls` crudos directamente con `xlrd`, sin reutilizar
+ninguna función de `build_data.py`): 414 valores de sector comparados (46
+trimestres × 9 sub-categorías), 0 discrepancias; ninguna porción negativa en
+ningún trimestre; la suma de las 9 sub-categorías reconcilia contra el
+Total que declara el propio BCRA con una diferencia relativa máxima de
+2×10⁻⁸ en los 46 trimestres; y el valor de `agro` coincide exactamente,
+trimestre a trimestre, con `total_ars_nacional` de `resumen_nacional`.
+
 ## Actualizar con un trimestre nuevo
 
 1. Sumá el Excel nuevo en `data/source/` (formato limpio `.xlsx` o crudo

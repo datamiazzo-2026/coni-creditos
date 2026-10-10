@@ -48,7 +48,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1 };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1 };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -897,6 +897,120 @@
   let resumenTasaChart, diffChart, costoChart;
   const RN = DATA.resumen_nacional || [];
 
+  // ---------- Composición del crédito total de la economía, por sector ----------
+  // DATA.resumen_sectores trae 9 sub-categorías por trimestre (ver
+  // build_resumen_sectores en build_data.py), pero para que la torta se lea
+  // de un vistazo se agrupan acá en 7: las 3 porciones más chicas y menos
+  // intuitivas para público general (resto de producción primaria --pesca y
+  // minería--, electricidad/gas/agua, y "no identificada") se suman en
+  // "Otros". Nunca se tocan los números en sí, solo cómo se presentan.
+  const RS = DATA.resumen_sectores || [];
+  // Orden del anillo de la torta = el mismo que se validó contra confusión
+  // por daltonismo (ver --sector-* en styles.css, incluye el par que cierra
+  // el anillo) -- no reordenar sin volver a correr el validador de la
+  // skill de dataviz. "otros" (gris, --text-faint) no es parte de ese
+  // chequeo por matiz: al ser un gris sin saturación se distingue de
+  // cualquier color por desaturación, no por tono.
+  const SECTOR_ORDER = ['agro', 'construccion', 'personas_fisicas', 'servicios', 'industria_no_agro', 'comercio', 'otros'];
+  const SECTOR_DISPLAY_LABELS = {
+    agro: 'Agro', construccion: 'Construcción', personas_fisicas: 'Personas físicas',
+    servicios: 'Servicios', industria_no_agro: 'Industria', comercio: 'Comercio', otros: 'Otros',
+  };
+  const SECTOR_CSS_VAR = {
+    agro: '--sector-agro', construccion: '--sector-construccion', personas_fisicas: '--sector-personas',
+    servicios: '--sector-servicios', industria_no_agro: '--sector-industria', comercio: '--sector-comercio',
+    otros: '--sector-otros',
+  };
+  function sectorColor(key){
+    return getComputedStyle(document.documentElement).getPropertyValue(SECTOR_CSS_VAR[key]).trim();
+  }
+  function groupSectores(raw){
+    return {
+      agro: raw.agro, construccion: raw.construccion, personas_fisicas: raw.personas_fisicas,
+      servicios: raw.servicios, industria_no_agro: raw.industria_no_agro, comercio: raw.comercio,
+      otros: raw.primaria_no_agro + raw.electricidad_gas_agua + raw.no_identificada,
+    };
+  }
+
+  let sectoresChart;
+  const sectoresSlider = document.getElementById('sectoresPeriodoSlider');
+  const sectoresFill = document.getElementById('sectoresPeriodoFill');
+  const sectoresPeriodoLabel = document.getElementById('sectoresPeriodoLabel');
+  if(sectoresSlider && RS.length){
+    sectoresSlider.max = String(PERIODOS.length - 1);
+    sectoresSlider.value = String(state.sectorPeriodoIdx);
+    sectoresSlider.addEventListener('input', ()=>{
+      state.sectorPeriodoIdx = Number(sectoresSlider.value);
+      renderSectoresChart();
+    });
+  }
+  function updateSectoresSliderUI(){
+    const lastIdx = PERIODOS.length - 1;
+    const pct = lastIdx ? (state.sectorPeriodoIdx / lastIdx * 100) : 100;
+    if(sectoresFill){ sectoresFill.style.left = '0%'; sectoresFill.style.right = (100 - pct) + '%'; }
+    if(sectoresPeriodoLabel) sectoresPeriodoLabel.textContent = PLABEL[PERIODOS[state.sectorPeriodoIdx]];
+  }
+
+  function renderSectoresChart(){
+    const legendEl = document.getElementById('sectoresLegend');
+    const bodyEl = document.getElementById('sectoresBody');
+    if(!document.getElementById('sectoresChart')) return;
+
+    updateSectoresSliderUI();
+
+    const entry = RS[state.sectorPeriodoIdx];
+    if(!entry){
+      if(sectoresChart){ sectoresChart.destroy(); sectoresChart = null; }
+      if(legendEl) legendEl.innerHTML = '';
+      if(bodyEl) bodyEl.innerHTML = '<tr><td colspan="4">Sin datos de composición sectorial para este trimestre.</td></tr>';
+      return;
+    }
+
+    const grouped = groupSectores(entry.sectores);
+    const total = SECTOR_ORDER.reduce((s,k)=> s + (grouped[k]||0), 0);
+    const rowsSorted = SECTOR_ORDER.slice().sort((a,b)=> grouped[b] - grouped[a]);
+
+    const ctx = document.getElementById('sectoresChart').getContext('2d');
+    if(sectoresChart) sectoresChart.destroy();
+    const surfaceColor = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+    sectoresChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: SECTOR_ORDER.map(k=>SECTOR_DISPLAY_LABELS[k]),
+        datasets: [{
+          data: SECTOR_ORDER.map(k=>grouped[k]),
+          backgroundColor: SECTOR_ORDER.map(k=>sectorColor(k)),
+          borderColor: surfaceColor, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c)=>{
+            const v = c.raw; const pct = total ? (v/total*100) : 0;
+            return c.label + ': ' + fmtMillones(v, '$') + ' (' + fmtPct.format(pct) + '%)';
+          } } },
+        },
+      },
+    });
+
+    if(legendEl){
+      legendEl.innerHTML = SECTOR_ORDER.map(k=>
+        '<span><i style="background:'+sectorColor(k)+'"></i>'+SECTOR_DISPLAY_LABELS[k]+'</span>'
+      ).join('');
+    }
+    if(bodyEl){
+      bodyEl.innerHTML = rowsSorted.map(k=>{
+        const v = grouped[k]; const pct = total ? (v/total*100) : 0;
+        return '<tr><td><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:'+sectorColor(k)+'"></i></td>'
+          + '<td>'+SECTOR_DISPLAY_LABELS[k]+'</td>'
+          + '<td class="num mono">'+fmtMillones(v, '$')+'</td>'
+          + '<td class="num mono">'+fmtPct.format(pct)+'%</td></tr>';
+      }).join('');
+    }
+  }
+
   function renderResumenTiles(){
     // Igual que el resto de la vista Resumen (ver renderDiffChart): la tarjeta
     // muestra el dato del extremo derecho de la ventana elegida en el slider,
@@ -1061,6 +1175,7 @@
     renderResumenTasaChart();
     renderDiffChart();
     renderCostoChart();
+    renderSectoresChart();
   }
 
   function syncPills(){
