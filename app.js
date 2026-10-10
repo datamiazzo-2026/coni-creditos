@@ -211,7 +211,7 @@
     const MESES_LARGOS = {'03':'marzo','06':'junio','09':'septiembre','12':'diciembre'};
     const perStr = String(PERIODOS[PERIODOS.length-1]);
     const labelLargo = (MESES_LARGOS[perStr.slice(4,6)] || perStr.slice(4,6)) + ' de ' + perStr.slice(0,4);
-    tip.innerHTML = '<b>¿Qué es "Pesos constantes"?</b>Significa descontar la inflación: cada valor histórico se muestra como si estuviera expresado en pesos de <b>'+labelLargo+'</b> (el último dato disponible), para poder comparar montos de distintos años sin que la inflación distorsione la comparación.';
+    tip.innerHTML = '<b>¿Qué es "Pesos constantes"?</b>Significa descontar la inflación: cada valor histórico se muestra como si estuviera expresado en pesos de <b>'+labelLargo+'</b>.';
 
     let hideTimer = null;
     // Al tocar un botón, el navegador también le da foco como parte del tap
