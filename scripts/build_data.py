@@ -796,6 +796,69 @@ def build_resumen_nacional(periodos, out_acts, ipc=None):
 
 
 # ---------------------------------------------------------------------------
+# Saldo en PESOS CONSTANTES (Saldos, Oct-2026)
+# ---------------------------------------------------------------------------
+#
+# A pedido de CONINAGRO, además del saldo total en pesos corrientes / dólares
+# / total equivalente en US$, se agrega una cuarta vista: el saldo total EN
+# PESOS CONSTANTES del último trimestre disponible de la serie (hoy Jun-26),
+# para poder comparar el crédito real a lo largo del tiempo sin que la
+# inflación distorsione la serie.
+#
+# data/ipc_indice_mensual.csv trae el ÍNDICE de precios (no la variación
+# mensual -- es un archivo distinto de data/ipc_mensual.csv, que se usa para
+# la tasa real de la pestaña Tasas) mes a mes. Para pasar cada trimestre a
+# pesos constantes:
+#   1. se promedia el índice de precios de los 3 meses calendario que
+#      componen ese trimestre (ej. el trimestre que termina en Mar-15 son
+#      enero, febrero y marzo de 2015) -- en vez de tomar el dato puntual del
+#      mes de cierre, para no quedar a merced de un solo mes volátil;
+#   2. el factor de cada trimestre es el promedio del ÚLTIMO trimestre de la
+#      serie sobre el promedio de ESE trimestre -- así el último trimestre
+#      queda con factor 1 (no se modifica, tal como pidió CONINAGRO) y los
+#      anteriores se ajustan hacia arriba.
+
+def load_ipc_indice_mensual(path):
+    """Devuelve {(anio, mes): indice_de_precios}."""
+    out = {}
+    with open(path, encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            out[(int(row['anio']), int(row['mes']))] = float(row['ipc_indice'])
+    return out
+
+
+def _quarter_avg_ipc(ipc_indice, anio, mes):
+    """Promedio del índice de precios en los 3 meses calendario que forman
+    el trimestre que TERMINA en (anio, mes) -- ej. (2015,3) promedia
+    enero+febrero+marzo de 2015. None si falta algún mes de esos 3 en
+    data/ipc_indice_mensual.csv."""
+    vals = []
+    for off in (-2, -1, 0):
+        y, m = _add_months(anio, mes, off)
+        v = ipc_indice.get((y, m))
+        if v is None:
+            return None
+        vals.append(v)
+    return sum(vals) / len(vals)
+
+
+def build_pesos_constantes_factor(periodos, ipc_indice):
+    """{periodo: factor} para convertir el saldo en pesos corrientes de ese
+    trimestre a pesos constantes del ÚLTIMO trimestre de `periodos`. None
+    para un trimestre si falta algún mes de su ventana en el CSV."""
+    base_per = periodos[-1]
+    base_anio, base_mes = int(str(base_per)[:4]), int(str(base_per)[4:6])
+    base_avg = _quarter_avg_ipc(ipc_indice, base_anio, base_mes)
+
+    factor = {}
+    for per in periodos:
+        anio, mes = int(str(per)[:4]), int(str(per)[4:6])
+        avg = _quarter_avg_ipc(ipc_indice, anio, mes)
+        factor[per] = (base_avg / avg) if (avg and base_avg) else None
+    return factor
+
+
+# ---------------------------------------------------------------------------
 # Desglose por provincia, POR PERÍODO (no solo el último)
 # ---------------------------------------------------------------------------
 #
@@ -807,10 +870,13 @@ def build_resumen_nacional(periodos, out_acts, ipc=None):
 # con repetir para cada período el mismo cálculo que antes se hacía una sola
 # vez para `last_per`.
 
-def _province_breakdown(idx, act, per):
-    """Desglose de SALDOS por provincia, en las 4 monedas/vistas del
-    dashboard, para una actividad y un período puntual. None si no hay fila
-    de TOTAL (moneda 0) para ese período -- mismo criterio que `series`."""
+def _province_breakdown(idx, act, per, factor_constante=None):
+    """Desglose de SALDOS por provincia, en las 5 monedas/vistas del
+    dashboard (incluye pesos constantes), para una actividad y un período
+    puntual. None si no hay fila de TOTAL (moneda 0) para ese período --
+    mismo criterio que `series`. `factor_constante` es el factor de
+    build_pesos_constantes_factor() para ESTE período puntual (None si no
+    hay data/ipc_indice_mensual.csv o falta algún mes de su ventana)."""
     r0 = idx.get((act, per, 0))
     if r0 is None:
         return None
@@ -820,11 +886,15 @@ def _province_breakdown(idx, act, per):
     pesos_ars = r1['provincias'] if r1 else {}
     dolares_usd = {}
     total_usd = {}
+    total_ars_constante = {}
     if r2 and tc:
         dolares_usd = {p: (round(v / tc) if v is not None else None) for p, v in r2['provincias'].items()}
     if tc:
         total_usd = {p: (round(v / tc) if v is not None else None) for p, v in total_ars.items()}
-    return {'total_ars': total_ars, 'pesos_ars': pesos_ars, 'dolares_usd': dolares_usd, 'total_usd': total_usd}
+    if factor_constante:
+        total_ars_constante = {p: (round(v * factor_constante) if v is not None else None) for p, v in total_ars.items()}
+    return {'total_ars': total_ars, 'pesos_ars': pesos_ars, 'dolares_usd': dolares_usd, 'total_usd': total_usd,
+            'total_ars_constante': total_ars_constante}
 
 
 def _tasas_province_breakdown(idx_tasas, act, per):
@@ -850,6 +920,14 @@ def build(source_paths, out_path):
 
     periodos = sorted({r['periodo'] for r in saldos} | {r['periodo'] for r in tasas})
     periodos_label = {p: period_label(p) for p in periodos}
+
+    ipc_indice_path = Path(out_path).parent / 'ipc_indice_mensual.csv'
+    pesos_constantes_factor = {}
+    if ipc_indice_path.exists():
+        ipc_indice = load_ipc_indice_mensual(ipc_indice_path)
+        pesos_constantes_factor = build_pesos_constantes_factor(periodos, ipc_indice)
+    else:
+        print(f"  AVISO: no se encontró {ipc_indice_path} -- no se calcula el saldo en pesos constantes.")
 
     # Si un mismo (Orden, período, moneda) aparece en más de una fuente, gana
     # la última fuente pasada en la línea de comando (los diccionarios de
@@ -895,8 +973,11 @@ def build(source_paths, out_path):
             dolares_ars_equiv = r2['total'] if r2 else None
             dolares_usd = round(dolares_ars_equiv / tc) if (dolares_ars_equiv and tc) else None
             total_usd = round(total_ars / tc) if (total_ars and tc) else None
+            factor_constante = pesos_constantes_factor.get(per)
+            total_ars_constante = round(total_ars * factor_constante) if (total_ars and factor_constante) else None
             series.append({'periodo': per, 'tc': tc, 'total_ars': total_ars, 'pesos_ars': pesos_ars,
-                            'dolares_usd': dolares_usd, 'total_usd': total_usd})
+                            'dolares_usd': dolares_usd, 'total_usd': total_usd,
+                            'total_ars_constante': total_ars_constante})
 
         n_completos = sum(1 for s in series if s)
         saldos_total_completo = n_completos == len(periodos)
@@ -905,7 +986,7 @@ def build(source_paths, out_path):
         )
 
         last_per = next((p for p in reversed(periodos) if idx.get((act, p, 0))), None)
-        provincias_series = [_province_breakdown(idx, act, per) for per in periodos]
+        provincias_series = [_province_breakdown(idx, act, per, pesos_constantes_factor.get(per)) for per in periodos]
 
         tasas_series = []
         for per in periodos:
