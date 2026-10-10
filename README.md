@@ -28,17 +28,23 @@ dashboard muestre la serie completa combinada:
 1. **Formato "crudo BCRA"** (`.xls`, hojas `Saldos` / `Tasas` /
    `Observaciones`): es el reporte SISCEN completo tal cual lo exporta el
    BCRA, con **todas** las actividades económicas del país (no solo agro),
-   en una jerarquía CIIU/CLANAE. El script identifica solo a las 12
-   actividades agro **por coincidencia exacta de nombre**, así que se le
-   puede pasar el archivo bruto, sin filtrar antes a mano. Es el formato
-   que se usa actualmente para **todos** los años cargados, 2015 a 2025
+   en una jerarquía CIIU/CLANAE. El script identifica las 21 actividades
+   agro/agroindustriales (ver "Actividades agro agregadas en Oct-2026" más
+   abajo) **por su número de Orden BCRA**, así que se le puede pasar el
+   archivo bruto, sin filtrar antes a mano. Es el formato que se usa
+   actualmente para **todos** los años cargados, 2015 a 2026
    (`data/source/PRESTAMOS_AL_SECTOR_AGRO_<año>_bcra_crudo.xls`).
 2. **Formato "limpio"** (`.xlsx`, hojas `... - SALDOS` / `... - TASAS`):
-   pensado para un Excel ya filtrado a mano a las 12 actividades agro. El
-   script lo sigue soportando, pero **no se usa ningún archivo en este
-   formato en el dataset actual** — el que se usaba para 2025 se reemplazó
-   por el crudo BCRA equivalente (ver más abajo, "Reemplazo del Excel
-   'limpio' de 2025").
+   pensado para un Excel ya filtrado a mano a un subconjunto fijo de
+   actividades agro. El script lo sigue soportando, pero **no se usa
+   ningún archivo en este formato en el dataset actual** — el que se usaba
+   para 2025 se reemplazó por el crudo BCRA equivalente (ver más abajo,
+   "Reemplazo del Excel 'limpio' de 2025"). Si se vuelve a usar este
+   formato, ojo: solo sabe leer la actividad tal cual viene en la columna A
+   del Excel, no tiene el mecanismo de Orden/agrupación que sí tiene el
+   crudo BCRA (ver más abajo) -- un Excel limpio con las actividades
+   agrupadas (Tabaco, Madera, Otros pecuarios) tendría que traerlas ya
+   sumadas a mano.
 
 En ambos formatos, cada fila es `ACTIVIDAD` × `PERIODO` (AAAAMMDD, cierre de
 trimestre) × `MONEDA`, con un total nacional y el desglose por las 24
@@ -179,25 +185,131 @@ doble control que el resto de los años.
 
 ### Actividades con serie incompleta
 
-Actualmente **no hay ninguna** actividad con serie incompleta: las 12
-actividades tienen los 44 trimestres (Mar-15 a Dic-25) completos, con
-desglose por moneda en `SALDOS` y `TASAS`. Esto es así desde que se
-reemplazó el Excel "limpio" de 2025 por el crudo BCRA equivalente (ver
-arriba) — el archivo limpio solo traía el saldo **total** (moneda 0) para 4
-de las 12 actividades (granja y otros animales, procesamiento de carnes y
-alimentos, elaboración de lácteos, molinería y alimento balanceado), sin
-pesos/dólares por separado ni tasa en dólares; el crudo BCRA sí trae el
-desglose completo para las 12.
+Las 21 actividades (ver más abajo) tienen saldo completo: los 46 trimestres
+(Mar-15 a Jun-26), con desglose por moneda en `SALDOS`
+(`saldos_total_completo` y `saldos_moneda_completo` en `True` para las 21).
+`tasas_completo` sí varía entre actividades -- no todas tienen tasa en
+pesos Y en dólares en los 46 trimestres (algunas chicas directamente no
+tuvieron crédito en dólares algún trimestre puntual), lo cual es normal y
+no afecta saldos ni el resto de la vista; la pestaña Tasas avisa con un
+punto junto al nombre de la actividad en la barra lateral cuando pasa esto.
 
-El dashboard igual calcula la completitud en tres niveles por separado
-(campos `saldos_total_completo`, `saldos_moneda_completo` y
-`tasas_completo` en el JSON, recalculados sobre **todos** los trimestres
-combinados, no un número fijo) por si en el futuro una fuente nueva vuelve
-a traer menos desglose que las anteriores: en ese caso el dashboard
-mostraría igual el gráfico, las tiles y la tabla de provincia en la vista
-**Total (US$ equiv.)** con todos los trimestres, pero deshabilitaría las
-vistas Pesos/Dólares (avisándolo) y mostraría el aviso de dato parcial en
-la pestaña Tasas, sin tocar código.
+El dashboard calcula la completitud en tres niveles por separado (campos
+`saldos_total_completo`, `saldos_moneda_completo` y `tasas_completo` en el
+JSON, recalculados sobre **todos** los trimestres combinados, no un número
+fijo) por si en el futuro una fuente nueva trae menos desglose que las
+anteriores: en ese caso el dashboard mostraría igual el gráfico, las tiles
+y la tabla de provincia en la vista **Total (US$ equiv.)** con todos los
+trimestres, pero deshabilitaría las vistas Pesos/Dólares (avisándolo) y
+mostraría el aviso de dato parcial en la pestaña Tasas, sin tocar código.
+
+### Actividades agro agregadas en Oct-2026
+
+Hasta Sep-2026 el dashboard mostraba las 12 actividades que CONINAGRO
+define en su propio informe. A pedido de Ciro se sumaron 9 actividades
+agro/agroindustriales más, tomadas del mismo árbol CIIU/CLANAE del crudo
+BCRA que ya se leía -- no hizo falta ningún dato nuevo, solo ampliar qué
+ramas del árbol lee el script. Quedaron **21 actividades** en total:
+
+- **6 nuevas, cada una su propia tarjeta**: Hortalizas/legumbres/flores,
+  Plantas para la obtención de fibras (algodón, entre otras), Plantas
+  sacaríferas (caña de azúcar, remolacha, entre otras), Otros cultivos
+  industriales, Producción de semillas, Servicios agrícolas, y Servicios
+  pecuarios (excepto los veterinarios).
+- **2 actividades agrupadas** (suman más de una rama del árbol BCRA en una
+  sola tarjeta):
+  - **"Otros pecuarios"**: todo lo que queda de "Cría de ganado y
+    producción de leche, lana y pelos" afuera de Bovino, Ovino, Porcino y
+    Producción de leche (que ya eran tarjetas propias) -- Equino, Caprino,
+    "En cabañas y haras", Producción de lana y pelos, y el "Otros" de esa
+    categoría puntual. Leche queda afuera de este grupo a propósito
+    (confirmado con Ciro): sigue siendo su propia tarjeta, no se duplica.
+  - **"Madera"**: Silvicultura/extracción de madera (sector primario) +
+    Producción de madera y fabricación de productos de madera y corcho
+    (industria) -- dos ramas en categorías de primer nivel distintas del
+    árbol BCRA (agricultura/ganadería/silvicultura vs. industria
+    manufacturera), unificadas en una tarjeta porque económicamente son la
+    misma cadena de valor.
+- **1 actividad existente ampliada**: **Tabaco** pasó a sumar Elaboración
+  de productos de tabaco (industria) a lo que ya tenía (el cultivo). La
+  tarjeta Tabaco de antes de Oct-2026 solo medía el cultivo; desde esta
+  actualización mide cultivo + industria combinados, así que su saldo creció
+  fuertemente de un trimestre al otro -- no es un error, es el cambio de
+  alcance. El campo `nombre_completo` del JSON lo aclara explícitamente
+  ("Tabaco (cultivo + elaboración de productos de tabaco)").
+
+**Identificación por Orden BCRA, no por nombre de texto**: hasta esta
+expansión, `build_data.py` identificaba cada actividad por coincidencia
+EXACTA de su nombre de texto. Eso dejó de alcanzar al querer agregar
+"Otros pecuarios": el BCRA reutiliza literalmente la palabra "Otros" en 5
+lugares distintos del árbol (ganadería, minería, industria, inmobiliaria,
+servicios) -- matchear por texto ahí mezclaría en silencio datos de
+categorías sin ninguna relación entre sí. La solución fue identificar cada
+actividad por su número de "Orden" BCRA (columna A de las hojas crudas),
+que es la clave real y unívoca de cada fila del árbol, y que verificamos
+estable en los 12 archivos fuente (2015-2026). `ORDEN_LABELS` +
+`_validate_orden_labels()` en `build_data.py` confirman en cada archivo que
+el texto de esa fila siga siendo el esperado para ese Orden antes de
+confiar en el número -- mismo patrón defensivo que ya usaban
+`_validate_units_label()` y `_validate_prov_columns()` para el bug de
+unidad y el de columnas de provincia (ver más arriba).
+
+**Cómo se suman las actividades agrupadas**: los SALDOS de un grupo (ej.
+Tabaco = cultivo + industria) se suman directo, provincia por provincia.
+Las TASAS se promedian ponderando por el saldo de cada sub-actividad en
+esa misma moneda y período (mismo criterio que la tasa ponderada nacional
+de la pestaña Resumen) -- nunca una suma ni un promedio simple, porque el
+peso de crédito de cada sub-actividad agrupada puede ser muy distinto (la
+industria del tabaco pesa bastante más que el cultivo, por ejemplo). Ver
+`_merge_saldo_group()` / `_merge_tasa_group()` en `build_data.py`.
+
+**Validado de punta a punta**, con el mismo rigor que la corrección de
+unidad de Sep-2026: recálculo 100% independiente en pandas (sin reusar
+ninguna función de `build_data.py`) de saldos, desglose por provincia y
+tasas ponderadas para las 9 actividades nuevas/agrupadas, en los 46
+trimestres -- 0 diferencias contra `dashboard_data.json` (fuera de
+redondeos de ±1 peso esperables por sumar en distinto orden). También se
+confirmó que las 11 actividades que NO cambiaron (todas las originales
+menos Tabaco) dieran EXACTAMENTE los mismos números que antes de este
+cambio (0 diferencias en saldos, tasas y desglose por provincia), y que
+`pesos + dólares×TC = total` siga cumpliéndose para las 21 actividades
+(966 filas chequeadas, 0 diferencias).
+
+**Impacto en "Participación en el crédito agro" y en el total nacional**:
+al sumar más actividades, el total nacional (`total_ars_nacional`) creció
+~28% (de ~$18,2 billones a ~$23,3 billones en Jun-26), así que la
+participación de CADA actividad (incluidas las 12 originales) se
+recalculó contra ese total más grande -- por ejemplo, Cereales pasó de
+~41% a ~32% del crédito agro total en Jun-26. Es el resultado esperado de
+ampliar el universo de actividades, no un error; el cálculo en sí
+(`act.total_ars / resumen_nacional.total_ars_nacional`) no cambió.
+
+**Importante -- ya no es comparable 1 a 1 contra el informe de CONINAGRO**:
+el total nacional de este dashboard, a partir de esta expansión, mide más
+actividades de las que cubre el informe de CONINAGRO (que sigue centrado
+en sus 12 actividades originales), así que la validación cruzada que se
+hizo en Sep-2026 (0,005% de diferencia para Jun-26, ver sección de Resumen
+más abajo) **dejó de aplicar en estos términos**: a partir de ahora
+nuestro total va a ser estructuralmente mayor que el de CONINAGRO, a
+propósito. Si en el futuro se quiere seguir validando contra su informe,
+hay que sumar solo las 12 actividades originales antes de comparar, no el
+total de las 21 -- la tasa ponderada nacional (pestaña Resumen) también se
+recalculó sobre las 21, así que tampoco es directamente comparable contra
+el número que publica CONINAGRO sin hacer el mismo recorte.
+
+**Chequeo de consistencia por provincia, con piso absoluto nuevo**: al
+agregar actividades chicas y de nicho (ej. Caprino) aparecieron 2 de 3677
+filas donde las provincias no suman exacto el total de la columna, pero
+con un total de apenas $17.000-31.000 -- montos irrelevantes a la escala
+del dashboard (miles de millones), muy probablemente redondeo o
+enmascaramiento estadístico del BCRA en celdas chicas, no un error de
+columna (ya validado por separado que el mapeo de columnas y de Orden es
+correcto en esas mismas filas). Se agregó un piso absoluto de $1.000.000 a
+`check_sum`: ahora solo frena si la diferencia es grande en términos
+relativos (>1%) Y TAMBIÉN en términos absolutos (>$1.000.000) -- una
+columna de provincia realmente mal mapeada seguiría desalineando TODAS las
+filas de esa columna con diferencias absolutas mucho mayores, así que el
+piso no tapa ese caso.
 
 ## Pestaña "Resumen": tasa ponderada, diferencial y pesos vs. dólares
 
@@ -231,11 +343,16 @@ cada semestre, se sumó una tercera pestaña con tres vistas a nivel nacional
    así que no parece un error propio; es más probable que la fuente de
    CONINAGRO para Jun-26 use un corte de datos distinto (más entidades
    informantes, un mes de cierre distinto dentro del trimestre, etc.). En
-   cambio, el **total nacional de crédito** (no la tasa) sí valida
-   perfecto: para Jun-26 este dashboard da US$ 12.303,6 millones contra los
-   US$ 12.303 millones que publica CONINAGRO -- una diferencia de 0,005%.
-   Vale la pena revisar esto cuando CONINAGRO actualice su informe con un
-   trimestre más.
+   cambio, el **total nacional de crédito** (no la tasa) sí validó
+   perfecto con el alcance de 12 actividades vigente hasta Sep-2026: para
+   Jun-26 daba US$ 12.303,6 millones contra los US$ 12.303 millones que
+   publica CONINAGRO -- una diferencia de 0,005%. **Desde que se agregaron
+   9 actividades más en Oct-2026 (ver "Actividades agro agregadas en
+   Oct-2026" más arriba), esta comparación ya no aplica tal cual**: el
+   total de acá pasó a medir más actividades de las que cubre el informe
+   de CONINAGRO, así que es estructuralmente mayor a propósito. Si se
+   quiere seguir validando contra el informe de CONINAGRO hay que sumar
+   solo las 12 actividades originales antes de comparar.
 2. **Diferencial de cada actividad vs. el promedio ponderado**: se calcula
    en el navegador (resta simple, `app.js`), no hace falta guardarlo en el
    JSON. Usa como referencia el trimestre que está en el extremo derecho
@@ -283,15 +400,18 @@ duplicarse.
 **Saldos** (`renderTiles()`): la cuarta tile, antes "Cobertura de datos"
 (cuántos de los 46 trimestres tenían dato -- un número que no decía mucho
 sobre la actividad en sí), ahora es **"Participación en el crédito agro"**:
-qué porcentaje del saldo total agropecuario (las 12 actividades
-combinadas, `resumen_nacional[i].total_ars_nacional`) representa el saldo
-total de la actividad elegida, en el trimestre del extremo derecho de la
-ventana elegida. `resumen_nacional` está alineado 1 a 1 por índice con
-`periodos`/`series`, así que se indexa con el mismo `state.rangeEnd` que
-el resto de las tiles. A diferencia de cobertura (un dato sobre la
-calidad de la serie), esta tile conecta la actividad puntual con el
-panorama general -- p. ej. Cereales/oleaginosas/forraje pesa ~41% del
-crédito agro total en Jun-26, mientras que Tabaco apenas ~0,2%.
+qué porcentaje del saldo total agropecuario (las `DATA.actividades.length`
+actividades combinadas -- 21 desde Oct-2026, ver "Actividades agro
+agregadas en Oct-2026" más arriba -- `resumen_nacional[i].total_ars_nacional`)
+representa el saldo total de la actividad elegida, en el trimestre del
+extremo derecho de la ventana elegida. `resumen_nacional` está alineado 1
+a 1 por índice con `periodos`/`series`, así que se indexa con el mismo
+`state.rangeEnd` que el resto de las tiles. A diferencia de cobertura (un
+dato sobre la calidad de la serie), esta tile conecta la actividad puntual
+con el panorama general -- p. ej. Cereales/oleaginosas/forraje pesa ~32%
+del crédito agro total en Jun-26 (bajó de ~41% al sumar más actividades
+al total, ver sección de arriba), mientras que Tabaco (ahora cultivo +
+industria combinados) pesa ~0,9%.
 
 **Tasas** (`renderTasaTiles()`, nuevo): cuatro tiles arriba del gráfico
 "Tasa nacional por trimestre", todas de la actividad elegida en el

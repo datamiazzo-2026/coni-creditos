@@ -243,11 +243,14 @@
     }
     wrap.appendChild(tileMezcla);
 
-    // Participación de esta actividad dentro del crédito agro total (las 12
-    // actividades combinadas), en el trimestre del extremo derecho de la
-    // ventana elegida -- mismo criterio de "período actual" que el resto de
-    // las tarjetas y paneles. Usa el total nacional de resumen_nacional, que
-    // está alineado 1 a 1 por índice con PERIODOS/series.
+    // Participación de esta actividad dentro del crédito agro total (todas
+    // las actividades combinadas, DATA.actividades.length -- no hardcodeado,
+    // porque a partir de que se agregaron más actividades agro/agroindustriales
+    // en Oct-2026 el total ya no son siempre "12"), en el trimestre del
+    // extremo derecho de la ventana elegida -- mismo criterio de "período
+    // actual" que el resto de las tarjetas y paneles. Usa el total nacional
+    // de resumen_nacional, que está alineado 1 a 1 por índice con
+    // PERIODOS/series.
     const tileParticip = document.createElement('div');
     tileParticip.className='tile';
     const perP = PERIODOS[state.rangeEnd];
@@ -257,7 +260,7 @@
       const share = sActP.total_ars/rnP.total_ars_nacional*100;
       tileParticip.innerHTML = '<div class="label">Participación en el crédito agro</div>'
         + '<div class="value mono">'+fmtPct.format(share)+'%</div>'
-        + '<div class="unit">del total de las 12 actividades en '+PLABEL[perP]+'</div>';
+        + '<div class="unit">del total de las '+DATA.actividades.length+' actividades en '+PLABEL[perP]+'</div>';
     } else {
       tileParticip.innerHTML = '<div class="label">Participación en el crédito agro</div>'
         + '<div class="value mono">—</div><div class="unit">sin dato de saldo total en '+PLABEL[perP]+'</div>';
@@ -814,6 +817,9 @@
     syncPills();
     if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
   }
+
+  const nActEl = document.getElementById('nActividadesResumen');
+  if(nActEl) nActEl.textContent = DATA.actividades.length;
 
   renderAll();
 
