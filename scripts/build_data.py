@@ -681,6 +681,8 @@ def build_resumen_nacional(periodos, out_acts):
         pesos_num = pesos_den = 0.0
         dolares_num = dolares_den = 0.0
         total_ars_nacional = 0.0
+        pesos_ars_nacional = 0.0
+        dolares_usd_nacional = 0.0
         tcs = []
         for act in out_acts:
             s = act['series'][i]
@@ -693,6 +695,17 @@ def build_resumen_nacional(periodos, out_acts):
                 dolares_den += s['dolares_usd']
             if s and s.get('total_ars'):
                 total_ars_nacional += s['total_ars']
+            # Denominadores nacionales por moneda específica (no por el "total
+            # equivalente en US$"), para la participación histórica de cada
+            # actividad cuando el usuario elige "Pesos" o "Dólares" en vez de
+            # "Total" -- ver renderParticipChart() en app.js. Mismo criterio que
+            # total_ars_nacional arriba: suma simple de lo reportado por cada
+            # actividad en esa moneda, tratando lo no reportado como ausente
+            # (no como cero).
+            if s and s.get('pesos_ars'):
+                pesos_ars_nacional += s['pesos_ars']
+            if s and s.get('dolares_usd'):
+                dolares_usd_nacional += s['dolares_usd']
             if s and s.get('tc'):
                 tcs.append(s['tc'])
         if tcs and (max(tcs) - min(tcs)) / max(tcs) > 0.001:
@@ -706,6 +719,8 @@ def build_resumen_nacional(periodos, out_acts):
             'tasa_dolares_ponderada': round(dolares_num / dolares_den, 2) if dolares_den else None,
             'tc': tcs[0] if tcs else None,
             'total_ars_nacional': round(total_ars_nacional) if total_ars_nacional else None,
+            'pesos_ars_nacional': round(pesos_ars_nacional) if pesos_ars_nacional else None,
+            'dolares_usd_nacional': round(dolares_usd_nacional) if dolares_usd_nacional else None,
         })
 
     for i, r in enumerate(resumen):
