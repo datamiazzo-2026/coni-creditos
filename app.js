@@ -191,9 +191,52 @@
     const btn = e.target.closest('button[data-cur]');
     if(!btn || btn.disabled) return;
     state.cur = btn.dataset.cur;
-    [...document.getElementById('curSeg').children].forEach(c=>c.classList.toggle('active', c===btn));
+    // querySelectorAll (no .children) porque "Pesos constantes" quedó
+    // envuelto en un <span class="seg-item"> para poder anclarle el cuadro
+    // de referencia (#constanteTooltip) -- ya no es un hijo directo de
+    // #curSeg como los otros tres botones.
+    document.getElementById('curSeg').querySelectorAll('button[data-cur]').forEach(c=>c.classList.toggle('active', c===btn));
     renderSaldosView();
   });
+
+  // Cuadro de referencia de "Pesos constantes": explica en lenguaje llano
+  // qué significa esa vista, para público general que no necesariamente
+  // sabe qué es "ajustar por inflación". Aparece al pasar el mouse (hover,
+  // desktop) o al tocar el botón (mobile, que no tiene hover -- se muestra
+  // unos segundos y se cierra sola).
+  (function initConstanteTooltip(){
+    const wrap = document.querySelector('#curSeg .seg-item');
+    const tip = document.getElementById('constanteTooltip');
+    if(!wrap || !tip) return;
+    const MESES_LARGOS = {'03':'marzo','06':'junio','09':'septiembre','12':'diciembre'};
+    const perStr = String(PERIODOS[PERIODOS.length-1]);
+    const labelLargo = (MESES_LARGOS[perStr.slice(4,6)] || perStr.slice(4,6)) + ' de ' + perStr.slice(0,4);
+    tip.innerHTML = '<b>¿Qué es "Pesos constantes"?</b>Significa descontar la inflación: cada valor histórico se muestra como si estuviera expresado en pesos de <b>'+labelLargo+'</b> (el último dato disponible), para poder comparar montos de distintos años sin que la inflación distorsione la comparación.';
+
+    let hideTimer = null;
+    // Al tocar un botón, el navegador también le da foco como parte del tap
+    // (se ve un "click" disparado unos ms después del touchstart, que mueve
+    // el foco al <button>). Eso dispara "focusin" en este wrapper, y como
+    // nunca llega un "focusout" después (nada más le quita el foco en
+    // mobile), un show() sin guardar ahí cancelaba (vía clearTimeout) el
+    // auto-cierre de 3,5s que programó el touchstart, y el cuadro quedaba
+    // abierto para siempre. Por eso mouseenter/mouseleave Y focusin/focusout
+    // se ignoran mientras touchLock esté activo: en touch, el touchstart ya
+    // se encarga de mostrar y de programar su propio cierre.
+    let touchLock = false;
+    function show(){ clearTimeout(hideTimer); tip.classList.add('visible'); }
+    function hide(delay){ clearTimeout(hideTimer); hideTimer = setTimeout(()=> tip.classList.remove('visible'), delay || 0); }
+    wrap.addEventListener('mouseenter', ()=>{ if(!touchLock) show(); });
+    wrap.addEventListener('mouseleave', ()=>{ if(!touchLock) hide(0); });
+    wrap.addEventListener('focusin', ()=>{ if(!touchLock) show(); });
+    wrap.addEventListener('focusout', ()=>{ if(!touchLock) hide(0); });
+    wrap.addEventListener('touchstart', ()=>{
+      touchLock = true;
+      show();
+      hide(3500);
+      setTimeout(()=>{ touchLock = false; }, 700);
+    }, {passive:true});
+  })();
 
   document.getElementById('tasaProvCurSeg').addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-cur]');

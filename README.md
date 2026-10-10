@@ -607,19 +607,40 @@ pesos corrientes.
 
 ### Metodología
 
-**Fuente**: `data/ipc_indice_mensual.csv` (140 filas, Ene-2015 a Ago-2026,
-columnas `anio,mes,ipc_indice`), extraído del Excel de índice de precios +
-factor de ajuste que pasó CONINAGRO. A diferencia de `data/ipc_mensual.csv`
-(variación % mensual, usado para la tasa real de la pestaña Tasas), este
-archivo trae el **índice de precios en nivel**, no la variación -- son dos
-fuentes independientes para dos features distintas.
+**Fuente**: `data/ipc_mensual.csv` (158 filas, Ene-2014 a Feb-2027,
+columnas `anio,mes,inflacion_mensual_pct,fuente`) -- la **misma** fuente de
+inflación que ya usaba la tasa real de la pestaña Tasas (INDEC real +
+proyección REM para los trimestres todavía sin dato oficial). A partir de
+esa variación % mensual se construye un **índice sintético** (base 100 en
+el primer mes de la serie, compuesto mes a mes: `build_synthetic_ipc_indice()`
+en `build_data.py`) -- lo único que importa para el ajuste son las razones
+entre meses/trimestres, así que la base elegida es arbitraria.
+
+> **Por qué no el Excel de índice de precios**: la primera versión de esta
+> feature usaba `data/ipc_indice_mensual.csv`, extraído de un Excel de
+> índice de precios que pasó CONINAGRO por separado. Al comparar ambas
+> fuentes, coincidían casi exactamente desde 2017 en adelante (diferencia
+> menor a 0,05 puntos porcentuales mensuales, solo redondeo) pero diferían
+> más en 2015-2016 (hasta ~1,9 puntos porcentuales en Dic-2015, con toda la
+> ventana Nov-15–Nov-16 mostrando diferencias de 0,7 a 1,9 puntos) --
+> esperable, ya que esa fue la ventana en que INDEC estuvo intervenido y
+> distintas fuentes reconstruyen esos meses de forma distinta. CONINAGRO
+> indicó que `data/ipc_mensual.csv` (la inflación 2014-2016 que ya se
+> había cargado antes, mes a mes, para la tasa real) es la fuente
+> confiable para ese período, así que se la adoptó como **única fuente de
+> inflación de todo el dashboard** -- la usan tanto la tasa real (Tasas)
+> como el saldo en pesos constantes (Saldos). El archivo
+> `data/ipc_indice_mensual.csv` queda en el repo sin usar, solo como
+> referencia histórica de la comparación.
 
 **Trimestral, no mensual**: como el saldo es un dato trimestral pero el
-índice viene mes a mes, cada trimestre se ajusta con el **promedio** del
-índice de sus 3 meses calendario (ej. el trimestre Mar-15 promedia
-enero+febrero+marzo de 2015), en vez del dato puntual del mes de cierre --
-así un mes particularmente volátil no distorsiona el ajuste de todo el
-trimestre. Función `_quarter_avg_ipc()` en `build_data.py`.
+índice (sintético) viene mes a mes, cada trimestre se ajusta con el
+**promedio** del índice de sus 3 meses calendario (ej. el trimestre Mar-15
+promedia enero+febrero+marzo de 2015), en vez del dato puntual del mes de
+cierre -- así un mes particularmente volátil no distorsiona el ajuste de
+todo el trimestre. Función `_quarter_avg_ipc()` en `build_data.py` (sin
+cambios; ahora recibe el índice sintético en vez del leído de un CSV de
+nivel).
 
 **Factor**: para cada trimestre, `factor = promedio_del_último_trimestre /
 promedio_de_ese_trimestre` (función `build_pesos_constantes_factor()`). El
@@ -630,22 +651,50 @@ campo nuevo es `total_ars_constante`, calculado para cada
 `actividades[].series[i]` y para cada provincia dentro de
 `actividades[].provincias_series[i]`.
 
-**Verificación**: se comparó el índice de este archivo contra
-`data/ipc_mensual.csv` (la otra fuente de inflación del dashboard, usada
-para la tasa real) para el período que ambos cubren (2015-2026): coinciden
-casi exactamente desde 2017 en adelante (diferencia menor a 0,05 puntos
-porcentuales mensuales, solo redondeo), pero difieren más en 2015-2016
-(hasta ~1,9 puntos porcentuales en un mes puntual) -- esperable, ya que esa
-fue la ventana en que INDEC estuvo intervenido y distintas fuentes
-reconstruyen esos meses de forma distinta. Se usó igualmente el archivo
-que pasó CONINAGRO para esta feature, tal como se indicó. Después de
-regenerar `dashboard_data.json`, un script independiente (que relee el CSV
-y recalcula el promedio trimestral y el factor con su propia lógica, sin
-reutilizar ninguna función de `build_data.py`) comparó `total_ars_constante`
-contra el valor esperado para las 21 actividades × 46 trimestres × todas
-las provincias (24.150 valores en total): 0 discrepancias, y se confirmó
-que el último trimestre (Jun-26) queda exactamente igual en las 21
-actividades.
+**Verificación**: después de regenerar `dashboard_data.json` con la fuente
+corregida, un script independiente (que relee `data/ipc_mensual.csv` y
+reconstruye el índice sintético, el promedio trimestral y el factor con su
+propia lógica, sin reutilizar ninguna función de `build_data.py`) comparó
+`total_ars_constante` contra el valor esperado para las 21 actividades ×
+46 trimestres × todas las provincias (24.150 valores en total): 0
+discrepancias, y se confirmó que el último trimestre (Jun-26) queda
+exactamente igual (factor 1.0) en las 21 actividades. También se confirmó
+que `resumen_nacional` (tasa real, pestaña Tasas) no cambió con este ajuste
+-- esperable, porque `data/ipc_mensual.csv` ya era la fuente que usaba esa
+feature y no se modificó.
+
+### Cuadro de referencia
+
+Al pasar el mouse sobre el botón "Pesos constantes" (o al tocarlo en
+mobile) se abre un cuadro chico explicando, en lenguaje simple, qué
+significa la vista: que los montos históricos se llevan a precios del
+último trimestre disponible (hoy Jun-26) para poder compararlos sin que la
+inflación distorsione la comparación. El mes/año se toma siempre de
+`PERIODOS[PERIODOS.length-1]` (nunca hardcodeado), así que el texto se
+actualiza solo con cada carga trimestral de datos nuevos. Implementado en
+`app.js` (IIFE `initConstanteTooltip`) + `styles.css` (`.seg-item`,
+`.seg-tooltip`); el botón quedó envuelto en un `<span class="seg-item">`
+en `index.html` para poder anclarle el cuadro.
+
+- **Desktop**: aparece con `mouseenter`/`focusin` (accesible por teclado)
+  sobre el botón, desaparece con `mouseleave`/`focusout`.
+- **Mobile** (sin hover): aparece al tocar el botón y se cierra sola a los
+  3,5s. Encontramos y corregimos un bug real acá: tocar un botón también
+  le da foco como parte del tap, lo que disparaba `focusin` unos ms
+  después del `touchstart` -- si ese `focusin` no se ignoraba, cancelaba
+  el cierre automático de 3,5s (vía el mismo `clearTimeout` que usa
+  `show()`) y el cuadro quedaba abierto para siempre, porque en mobile
+  nunca llega un `focusout` que lo cierre. La solución fue una bandera
+  `touchLock` (activa 700ms desde el `touchstart`) que hace que
+  `mouseenter`/`mouseleave` **y** `focusin`/`focusout` se ignoren mientras
+  esté activa -- en touch, el propio `touchstart` ya se encarga de
+  mostrar el cuadro y de programar su cierre.
+- Verificado con Playwright: mobile (mostrar al tocar, seguir visible a
+  +1,1s, ocultarse solo a +3,8s, volver a mostrarse en un segundo toque),
+  desktop (mostrar/ocultar con hover), teclado (`focus`/`blur`), que el
+  click en el botón sigue cambiando de moneda y marcando el botón activo
+  (no se rompió por el nuevo wrapper), modo oscuro, y ausencia de errores
+  de consola.
 
 ## Mapa de saldo (y de tasa) por provincia
 
