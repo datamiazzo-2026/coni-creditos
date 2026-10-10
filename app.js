@@ -38,7 +38,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', rangeStart:0, rangeEnd: PERIODOS.length-1 };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1 };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -193,7 +193,15 @@
     renderTasaProvinceMap(getAct(state.actId));
   });
 
-  let evolChart, tasaChart, participChart, mixChart;
+  document.getElementById('tasaPesosModeSeg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-mode]');
+    if(!btn) return;
+    state.tasaPesosMode = btn.dataset.mode;
+    [...document.getElementById('tasaPesosModeSeg').children].forEach(c=>c.classList.toggle('active', c===btn));
+    renderTasaPesosChart(getAct(state.actId));
+  });
+
+  let evolChart, tasaPesosChart, tasaDolaresChart, participChart, mixChart;
 
   // Misma idea que currencyMeta(), pero para la participación en el crédito
   // agro total: a diferencia del resto de la vista Saldos (que en "Total"
@@ -672,25 +680,79 @@
     renderProvinceTable(act);
   }
 
-  function renderTasaChart(act){
+  // Tasa real = tasa nominal deflactada por la inflación de una ventana
+  // centrada de 12 meses (6 antes + 6 después de cada trimestre), con
+  // fórmula de Fisher: (1+nominal)/(1+inflación) - 1. RN[i].inflacion_12m_centrada
+  // viene de build_data.py (data/ipc_mensual.csv: INDEC real + proyección REM
+  // para los meses que todavía no están publicados). Solo aplica a la vista
+  // de Tasas en pesos -- la tasa ponderada de Resumen sigue siendo siempre
+  // nominal (así lo pidió el usuario explícitamente).
+  function tasaRealFisher(nominalPct, inflacionPct){
+    if(nominalPct==null || inflacionPct==null) return null;
+    return ((1 + nominalPct/100) / (1 + inflacionPct/100) - 1) * 100;
+  }
+
+  function renderTasaPesosChart(act){
     const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
     const labels = periodosVisible.map(p=>PLABEL[p]);
     const tasasVisible = act.tasas.slice(state.rangeStart, state.rangeEnd+1);
-    const pesos = tasasVisible.map(t=>t.pesos);
-    const dolares = tasasVisible.map(t=>t.dolares);
+    const rnVisible = RN.slice(state.rangeStart, state.rangeEnd+1);
+    const isReal = state.tasaPesosMode === 'real';
+
+    const pesos = tasasVisible.map((t, i)=>{
+      if(!isReal) return t.pesos;
+      const r = rnVisible[i];
+      return tasaRealFisher(t.pesos, r && r.inflacion_12m_centrada);
+    });
 
     const styles = getComputedStyle(document.documentElement);
     const accent = styles.getPropertyValue('--accent').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('tasaPesosChart').getContext('2d');
+    if(tasaPesosChart) tasaPesosChart.destroy();
+    tasaPesosChart = new Chart(ctx, {
+      type:'bar',
+      data:{ labels, datasets:[
+        { label: isReal ? 'Pesos (real)' : 'Pesos', data: pesos, backgroundColor: accent, borderRadius:5, maxBarThickness:34 },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+fmtPct.format(c.raw)+'%' } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' }, beginAtZero: !isReal }
+        }
+      }
+    });
+
+    let desc = isReal
+      ? 'Tasa real: la nominal ajustada por inflación (fórmula de Fisher), con ventana de 12 meses centrada en cada trimestre.'
+      : 'Tasa nominal anual en pesos, por trimestre.';
+    const conProyeccion = isReal && rnVisible.some(r=> r && r.inflacion_meses_proyectados > 0);
+    if(conProyeccion){
+      desc += ' Los últimos trimestres toman parte de esa ventana de la proyección REM (INDEC aún no publicó esos meses).';
+    }
+    document.getElementById('tasaPesosDesc').innerHTML = desc;
+  }
+
+  function renderTasaDolaresChart(act){
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const tasasVisible = act.tasas.slice(state.rangeStart, state.rangeEnd+1);
+    const dolares = tasasVisible.map(t=>t.dolares);
+
+    const styles = getComputedStyle(document.documentElement);
     const gold = styles.getPropertyValue('--gold').trim();
     const textColor = styles.getPropertyValue('--text-muted').trim();
     const gridColor = styles.getPropertyValue('--border').trim();
 
-    const ctx = document.getElementById('tasaChart').getContext('2d');
-    if(tasaChart) tasaChart.destroy();
-    tasaChart = new Chart(ctx, {
+    const ctx = document.getElementById('tasaDolaresChart').getContext('2d');
+    if(tasaDolaresChart) tasaDolaresChart.destroy();
+    tasaDolaresChart = new Chart(ctx, {
       type:'bar',
       data:{ labels, datasets:[
-        { label:'Pesos', data: pesos, backgroundColor: accent, borderRadius:5, maxBarThickness:34 },
         { label:'Dólares', data: dolares, backgroundColor: gold, borderRadius:5, maxBarThickness:34 },
       ]},
       options:{
@@ -701,19 +763,6 @@
           y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' }, beginAtZero:true }
         }
       }
-    });
-    const legendEl = document.getElementById('tasaLegend');
-    legendEl.innerHTML =
-      '<span class="toggle" data-idx="0"><i style="background:'+accent+'"></i>Pesos</span>'
-      + '<span class="toggle" data-idx="1"><i style="background:'+gold+'"></i>Dólares</span>';
-    legendEl.querySelectorAll('.toggle').forEach(function(el){
-      el.onclick = function(){
-        const idx = Number(el.dataset.idx);
-        const visible = tasaChart.isDatasetVisible(idx);
-        tasaChart.setDatasetVisibility(idx, !visible);
-        tasaChart.update();
-        el.classList.toggle('off', visible);
-      };
     });
   }
 
@@ -781,7 +830,8 @@
       noteEl.style.display = 'none';
     }
     renderTasaTiles(act);
-    renderTasaChart(act);
+    renderTasaPesosChart(act);
+    renderTasaDolaresChart(act);
     renderTasaProvinceMap(act);
   }
 

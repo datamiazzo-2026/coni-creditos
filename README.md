@@ -522,6 +522,78 @@ arma una copia ordenada (`ACTIVIDADES_ALFABETICO`) y nunca reordena
 por default, el orden en que se procesan los datos, etc.) no se ve
 afectado.
 
+## Tasa real en pesos (Oct-2026)
+
+La pestaña Tasas tenía un único gráfico de barras con "Pesos" y "Dólares"
+como dos series toggleables (`renderTasaChart()`, canvas `#tasaChart`). A
+pedido de CONINAGRO se separó en dos gráficos independientes:
+
+- **Tasa en pesos** (`renderTasaPesosChart()`, canvas `#tasaPesosChart`):
+  agrega un selector **Nominal / Real** (`#tasaPesosModeSeg`). En
+  "Real" se descuenta la inflación de la tasa nominal reportada.
+- **Tasa en dólares** (`renderTasaDolaresChart()`, canvas
+  `#tasaDolaresChart`): queda igual que antes, siempre nominal -- no
+  tiene selector.
+
+El selector Nominal/Real **solo existe en este gráfico de la pestaña
+Tasas**. La tasa ponderada nacional de la pestaña Resumen
+(`renderResumenTasaChart()`) sigue siendo siempre nominal, sin cambios --
+así lo pidió explícitamente CONINAGRO.
+
+### Metodología de la tasa real
+
+**Fórmula (Fisher)**, elegida por CONINAGRO entre las opciones ofrecidas:
+
+```
+tasa_real = (1 + tasa_nominal/100) / (1 + inflación_12m/100) - 1   [× 100 para %]
+```
+
+**Inflación de referencia**: en vez de la inflación interanual de los 12
+meses PREVIOS al dato (que queda rezagada respecto al trimestre), se usa
+una **ventana centrada** de 12 meses: 6 meses antes + 6 meses después del
+mes de cierre del trimestre, sin contar ese mes (offsets -6..-1, +1..+6).
+Es la inflación compuesta (multiplicativa, no la suma simple) de esos 12
+meses. Función `centered_inflacion_12m()` en `build_data.py`, campo
+`inflacion_12m_centrada` en cada `resumen_nacional[i]` (uno por
+trimestre, igual que el resto de esa estructura).
+
+**Fuente de los datos de inflación** -- `data/ipc_mensual.csv`
+(158 filas, Ene-2014 a Feb-2027, columnas `anio,mes,inflacion_mensual_pct,fuente`):
+
+- **INDEC** (real, 152 meses: Ene-2014 a Ago-2026): IPC Nacional, variación
+  mensual, "Nivel general" / "Total nacional". Ene-2014 a Dic-2016 se
+  cargó a mano con los valores publicados por INDEC (esos años no
+  estaban en la planilla que exporta la serie 2017-2026 en adelante);
+  Ene-2017 a Ago-2026 sale de la planilla oficial `Variación mensual IPC
+  Nacional.xls`.
+- **REM** (proyección, 6 meses: Sep-2026 a Feb-2027): expectativas de
+  mercado (Relevamiento de Expectativas de Mercado del BCRA) para
+  completar la ventana centrada de los trimestres más recientes, que
+  todavía no tienen los 6 meses posteriores publicados por INDEC. Dato
+  dado por CONINAGRO: 1,7% mensual para los primeros 3 meses (Sep/Oct/Nov-26),
+  1,5% para los siguientes 3 (Dic-26/Ene-27/Feb-27).
+
+Con esa cobertura, los 46 trimestres del dashboard (Mar-15 a Jun-26)
+tienen la ventana centrada completa. Solo los dos trimestres más
+recientes dependen parcialmente de la proyección REM en vez de un dato
+INDEC ya publicado: Mar-26 (1 de los 12 meses de su ventana) y Jun-26
+(4 de los 12). Eso se expone en `inflacion_meses_proyectados` (0-12) en
+cada `resumen_nacional[i]`, y el frontend muestra un aviso corto debajo
+del gráfico cuando el trimestre visible en modo "Real" usa algún mes
+proyectado.
+
+**Verificación**: se armó `data/ipc_mensual.csv` combinando las 4 fuentes
+(dos tablas de INDEC pegadas en el chat para 2014-2015 y 2016, la
+planilla INDEC para 2017-2026, y la proyección REM) y se confirmó que
+cubre los 158 meses esperados sin huecos ni duplicados. Después de
+regenerar `dashboard_data.json`, un script independiente (que relee el
+CSV y recalcula la ventana centrada con su propia lógica, sin reutilizar
+ninguna función de `build_data.py`) comparó `inflacion_12m_centrada` e
+`inflacion_meses_proyectados` para los 46 trimestres: 0 discrepancias.
+También se verificó en el navegador (Playwright) que la tasa real que
+efectivamente grafica Chart.js, para una actividad de prueba y varios
+trimestres, coincide con el cálculo manual de Fisher sobre el JSON.
+
 ## Mapa de saldo (y de tasa) por provincia
 
 El panel "Saldo por provincia" (pestaña Saldos) y el panel "Tasa por

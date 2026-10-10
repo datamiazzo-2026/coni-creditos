@@ -113,10 +113,21 @@
     <div class="tiles" id="tasaTiles"></div>
 
     <div class="panel">
-      <h2>Tasa nacional por trimestre</h2>
-      <div class="desc">Tasa nominal anual a nivel nacional (columna Total de la fuente), pesos vs. dólares.</div>
-      <div class="legend" id="tasaLegend"></div>
-      <div class="chartwrap"><canvas id="tasaChart"></canvas></div>
+      <div class="panelhead">
+        <h2>Tasa en pesos</h2>
+        <div class="segmented" id="tasaPesosModeSeg">
+          <button data-mode="nominal" class="active">Nominal</button>
+          <button data-mode="real">Real</button>
+        </div>
+      </div>
+      <div class="desc" id="tasaPesosDesc">Tasa nominal anual en pesos, por trimestre.</div>
+      <div class="chartwrap"><canvas id="tasaPesosChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Tasa en dólares</h2>
+      <div class="desc">Tasa nominal anual en dólares, por trimestre.</div>
+      <div class="chartwrap"><canvas id="tasaDolaresChart"></canvas></div>
     </div>
 
     <div id="rangeSlot-tasas"></div>
