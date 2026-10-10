@@ -255,8 +255,12 @@
       }
     });
 
-    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
-    document.getElementById('participChartDesc').innerHTML = 'Participación de <b>'+act.nombre+'</b> en el crédito agro total (<b>'+pm.label+'</b>), por trimestre, '+rangoLbl+'. Se calcula sobre el total de las '+DATA.actividades.length+' actividades, en la misma moneda elegida arriba.';
+    // pm.label para 'total' ya dice "total, equivalente en US$" -- si se le
+    // antepone "...en el crédito agro total, {pm.label}" queda "...agro
+    // total, total, equivalente..." (total repetido). Por eso ese modo no
+    // repite el calificador de moneda; pesos/dólares sí lo agregan.
+    const monedaSufijo = state.cur==='total' ? '' : (', '+pm.label);
+    document.getElementById('participChartDesc').innerHTML = 'Participación de <b>'+act.nombre+'</b> en el crédito agro total'+monedaSufijo+'.';
   }
 
   // Mix de monedas en el tiempo: para cada trimestre de la ventana elegida,
@@ -325,8 +329,7 @@
       };
     });
 
-    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
-    document.getElementById('mixChartDesc').innerHTML = 'Qué parte del saldo de <b>'+act.nombre+'</b> está en pesos y qué parte en dólares (llevado a pesos con el tipo de cambio de ese mismo trimestre), por trimestre, '+rangoLbl+'. Las dos series suman ~100% del saldo de la actividad.';
+    document.getElementById('mixChartDesc').innerHTML = 'Mix de pesos y dólares en el saldo de <b>'+act.nombre+'</b>.';
   }
 
   function renderTiles(act){
@@ -454,8 +457,7 @@
       }
     });
 
-    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
-    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b> por trimestre, '+rangoLbl+'. La última barra marca el corte más reciente disponible en la ventana elegida.';
+    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b>, por trimestre.';
     document.getElementById('chartLegend').innerHTML =
       '<span><i style="background:'+muted+'"></i>trimestre anterior</span>'
       + '<span><i style="background:'+hi+'"></i>último dato</span>';
