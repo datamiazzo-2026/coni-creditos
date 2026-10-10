@@ -805,33 +805,56 @@ def build_resumen_nacional(periodos, out_acts, ipc=None):
 # para poder comparar el crédito real a lo largo del tiempo sin que la
 # inflación distorsione la serie.
 #
-# data/ipc_indice_mensual.csv trae el ÍNDICE de precios (no la variación
-# mensual -- es un archivo distinto de data/ipc_mensual.csv, que se usa para
-# la tasa real de la pestaña Tasas) mes a mes. Para pasar cada trimestre a
-# pesos constantes:
-#   1. se promedia el índice de precios de los 3 meses calendario que
-#      componen ese trimestre (ej. el trimestre que termina en Mar-15 son
-#      enero, febrero y marzo de 2015) -- en vez de tomar el dato puntual del
+# FUENTE (revisado, Oct-2026): originalmente este ajuste se armó con el
+# índice de precios de data/ipc_indice_mensual.csv (un Excel aparte que pasó
+# CONINAGRO). Al cruzarlo contra data/ipc_mensual.csv -- la inflación
+# mensual que CONINAGRO había pasado antes por chat para la tasa real de la
+# pestaña Tasas -- aparecieron diferencias de hasta ~1,9 puntos porcentuales
+# por mes en la ventana Nov-15/Nov-16 (el período en que el INDEC estuvo sin
+# publicar una serie oficial propia). CONINAGRO pidió explícitamente tomar
+# como fuente confiable la inflación mensual que había pasado por chat
+# (data/ipc_mensual.csv), no el índice del Excel. Por eso el ajuste de pesos
+# constantes ahora se construye a partir de data/ipc_mensual.csv -- LA MISMA
+# fuente que ya usa la tasa real -- en vez de un archivo de índice aparte:
+# un solo dato de inflación para todo el dashboard, sin ambigüedad.
+# data/ipc_indice_mensual.csv queda en el repo como referencia histórica del
+# Excel original, pero ya no lo usa build_data.py.
+#
+# Para pasar cada trimestre a pesos constantes:
+#   1. se arma un índice de precios SINTÉTICO componiendo mes a mes la
+#      inflación de data/ipc_mensual.csv (base 100 en el primer mes de esa
+#      serie) -- build_synthetic_ipc_indice();
+#   2. se promedia ese índice en los 3 meses calendario que componen cada
+#      trimestre (ej. el trimestre que termina en Mar-15 promedia
+#      enero+febrero+marzo de 2015) -- en vez de tomar el dato puntual del
 #      mes de cierre, para no quedar a merced de un solo mes volátil;
-#   2. el factor de cada trimestre es el promedio del ÚLTIMO trimestre de la
+#   3. el factor de cada trimestre es el promedio del ÚLTIMO trimestre de la
 #      serie sobre el promedio de ESE trimestre -- así el último trimestre
 #      queda con factor 1 (no se modifica, tal como pidió CONINAGRO) y los
 #      anteriores se ajustan hacia arriba.
 
-def load_ipc_indice_mensual(path):
-    """Devuelve {(anio, mes): indice_de_precios}."""
-    out = {}
-    with open(path, encoding='utf-8') as f:
-        for row in csv.DictReader(f):
-            out[(int(row['anio']), int(row['mes']))] = float(row['ipc_indice'])
-    return out
+def build_synthetic_ipc_indice(ipc_mensual):
+    """Índice de precios SINTÉTICO (base 100 en el primer mes de
+    data/ipc_mensual.csv), construido componiendo mes a mes su inflación
+    (la misma fuente -- INDEC real + proyección REM -- que usa la tasa real
+    de la pestaña Tasas). Solo importan las RAZONES entre meses para el
+    ajuste de pesos constantes, así que la base elegida (100) es arbitraria.
+    `ipc_mensual` es el dict {(anio,mes): (pct, fuente)} de load_ipc_mensual()."""
+    indice = {}
+    nivel = 100.0
+    for i, (y, m) in enumerate(sorted(ipc_mensual.keys())):
+        if i > 0:
+            pct, _fuente = ipc_mensual[(y, m)]
+            nivel *= (1 + pct / 100)
+        indice[(y, m)] = nivel
+    return indice
 
 
 def _quarter_avg_ipc(ipc_indice, anio, mes):
     """Promedio del índice de precios en los 3 meses calendario que forman
     el trimestre que TERMINA en (anio, mes) -- ej. (2015,3) promedia
-    enero+febrero+marzo de 2015. None si falta algún mes de esos 3 en
-    data/ipc_indice_mensual.csv."""
+    enero+febrero+marzo de 2015. None si falta algún mes de esos 3 en el
+    índice recibido."""
     vals = []
     for off in (-2, -1, 0):
         y, m = _add_months(anio, mes, off)
@@ -921,13 +944,21 @@ def build(source_paths, out_path):
     periodos = sorted({r['periodo'] for r in saldos} | {r['periodo'] for r in tasas})
     periodos_label = {p: period_label(p) for p in periodos}
 
-    ipc_indice_path = Path(out_path).parent / 'ipc_indice_mensual.csv'
+    # data/ipc_mensual.csv es la ÚNICA fuente de inflación del dashboard
+    # (INDEC real + proyección REM) -- la usan tanto la tasa real de la
+    # pestaña Tasas (más abajo, build_resumen_nacional) como el saldo en
+    # pesos constantes de Saldos (ver comentario arriba de
+    # build_synthetic_ipc_indice sobre por qué se dejó de usar
+    # data/ipc_indice_mensual.csv para esto último).
+    ipc_path = Path(out_path).parent / 'ipc_mensual.csv'
+    ipc = load_ipc_mensual(ipc_path) if ipc_path.exists() else None
+
     pesos_constantes_factor = {}
-    if ipc_indice_path.exists():
-        ipc_indice = load_ipc_indice_mensual(ipc_indice_path)
-        pesos_constantes_factor = build_pesos_constantes_factor(periodos, ipc_indice)
+    if ipc:
+        ipc_indice_sintetico = build_synthetic_ipc_indice(ipc)
+        pesos_constantes_factor = build_pesos_constantes_factor(periodos, ipc_indice_sintetico)
     else:
-        print(f"  AVISO: no se encontró {ipc_indice_path} -- no se calcula el saldo en pesos constantes.")
+        print(f"  AVISO: no se encontró {ipc_path} -- no se calcula el saldo en pesos constantes ni la tasa real.")
 
     # Si un mismo (Orden, período, moneda) aparece en más de una fuente, gana
     # la última fuente pasada en la línea de comando (los diccionarios de
@@ -1013,10 +1044,7 @@ def build(source_paths, out_path):
             'tasas_provincias_series': tasas_provincias_series,
         })
 
-    ipc_path = Path(out_path).parent / 'ipc_mensual.csv'
-    ipc = load_ipc_mensual(ipc_path) if ipc_path.exists() else None
-    if ipc is None:
-        print(f"  AVISO: no se encontró {ipc_path} -- resumen_nacional no tendrá campos de inflación/tasa real.")
+    # `ipc` ya se cargó más arriba (se usa también para pesos_constantes_factor).
     resumen_nacional = build_resumen_nacional(periodos, out_acts, ipc=ipc)
 
     data = {'periodos': periodos, 'periodos_label': periodos_label,
