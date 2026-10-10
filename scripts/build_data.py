@@ -90,6 +90,7 @@ moneda y período -- igual criterio que la tasa ponderada nacional de
 el peso de crédito de cada sub-actividad agrupada puede ser muy distinto.
 Ver `_merge_saldo_group` / `_merge_tasa_group`.
 """
+import csv
 import json
 import re
 import sys
@@ -674,8 +675,59 @@ def _merge_tasa_group(ordenes, idx_raw_tasas, idx_raw_saldos, per, mon, provinci
 # realizada, para poder compararla de igual a igual contra la tasa
 # ponderada en pesos. No existe para los primeros 4 trimestres de la serie
 # (no hay "hace un año" contra qué comparar el tipo de cambio).
+#
+# Inflación mensual (IPC) -- ventana centrada a 12 meses, para "tasa real"
+# ---------------------------------------------------------------------------
+#
+# data/ipc_mensual.csv consolida: INDEC real (2014-2026/08) + proyección REM
+# (2026/09-2027/02, para poder completar la ventana de los últimos
+# trimestres). Columnas: anio,mes,inflacion_mensual_pct,fuente ('INDEC'/'REM').
 
-def build_resumen_nacional(periodos, out_acts):
+def load_ipc_mensual(path):
+    """Devuelve {(anio, mes): (pct, fuente)}."""
+    ipc = {}
+    with open(path, encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            key = (int(row['anio']), int(row['mes']))
+            ipc[key] = (float(row['inflacion_mensual_pct']), row['fuente'])
+    return ipc
+
+
+def _add_months(anio, mes, delta):
+    total = (anio * 12 + (mes - 1)) + delta
+    return total // 12, total % 12 + 1
+
+
+def centered_inflacion_12m(ipc, anio, mes):
+    """Inflación acumulada (compuesta, multiplicativa) de los 12 meses que
+    rodean a (anio, mes): 6 meses antes + 6 meses después, SIN incluir el
+    propio mes de referencia (offsets -6..-1, +1..+6). Se usa para ajustar
+    por inflación un dato trimestral tomando una ventana simétrica centrada
+    en ese trimestre, en vez de la inflación interanual de los 12 meses
+    previos (que queda totalmente rezagada respecto al dato).
+
+    Devuelve (pct_acumulado, meses_proyectados), donde meses_proyectados es
+    la cantidad (0-12) de los 12 meses que vinieron de la proyección REM en
+    vez de un dato INDEC real -- para que el frontend pueda avisar cuando el
+    dato "real" de un trimestre reciente todavía depende en parte de una
+    proyección. Devuelve (None, None) si falta algún mes de la ventana (no
+    debería pasar con la cobertura actual de data/ipc_mensual.csv).
+    """
+    factor = 1.0
+    meses_proyectados = 0
+    for off in (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6):
+        y, m = _add_months(anio, mes, off)
+        dato = ipc.get((y, m))
+        if dato is None:
+            return None, None
+        pct, fuente = dato
+        factor *= (1 + pct / 100)
+        if fuente == 'REM':
+            meses_proyectados += 1
+    return round((factor - 1) * 100, 4), meses_proyectados
+
+
+def build_resumen_nacional(periodos, out_acts, ipc=None):
     resumen = []
     for i, per in enumerate(periodos):
         pesos_num = pesos_den = 0.0
@@ -713,6 +765,11 @@ def build_resumen_nacional(periodos, out_acts):
                 f"El tipo de cambio no coincide entre actividades en el período {per}: {tcs} "
                 "-- se esperaba el mismo TC nacional para todas."
             )
+        inflacion_12m_centrada = inflacion_meses_proyectados = None
+        if ipc is not None:
+            anio, mes = int(str(per)[:4]), int(str(per)[4:6])
+            inflacion_12m_centrada, inflacion_meses_proyectados = centered_inflacion_12m(ipc, anio, mes)
+
         resumen.append({
             'periodo': per,
             'tasa_pesos_ponderada': round(pesos_num / pesos_den, 2) if pesos_den else None,
@@ -721,6 +778,8 @@ def build_resumen_nacional(periodos, out_acts):
             'total_ars_nacional': round(total_ars_nacional) if total_ars_nacional else None,
             'pesos_ars_nacional': round(pesos_ars_nacional) if pesos_ars_nacional else None,
             'dolares_usd_nacional': round(dolares_usd_nacional) if dolares_usd_nacional else None,
+            'inflacion_12m_centrada': inflacion_12m_centrada,
+            'inflacion_meses_proyectados': inflacion_meses_proyectados,
         })
 
     for i, r in enumerate(resumen):
@@ -873,7 +932,11 @@ def build(source_paths, out_path):
             'tasas_provincias_series': tasas_provincias_series,
         })
 
-    resumen_nacional = build_resumen_nacional(periodos, out_acts)
+    ipc_path = Path(out_path).parent / 'ipc_mensual.csv'
+    ipc = load_ipc_mensual(ipc_path) if ipc_path.exists() else None
+    if ipc is None:
+        print(f"  AVISO: no se encontró {ipc_path} -- resumen_nacional no tendrá campos de inflación/tasa real.")
+    resumen_nacional = build_resumen_nacional(periodos, out_acts, ipc=ipc)
 
     data = {'periodos': periodos, 'periodos_label': periodos_label,
             'provincias': PROVINCIAS, 'actividades': out_acts,
