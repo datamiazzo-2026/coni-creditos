@@ -181,7 +181,71 @@
     renderTasaProvinceMap(getAct(state.actId));
   });
 
-  let evolChart, tasaChart;
+  let evolChart, tasaChart, participChart;
+
+  // Misma idea que currencyMeta(), pero para la participación en el crédito
+  // agro total: a diferencia del resto de la vista Saldos (que en "Total"
+  // muestra el equivalente en US$), la participación siempre compara ARS
+  // contra ARS o USD contra USD dentro de la misma moneda -- el resultado es
+  // igual de todas formas (dividir dos montos en US$ da el mismo cociente que
+  // dividirlos en ARS, porque ambos usan el mismo tipo de cambio de ese
+  // trimestre), así que se usa directamente el campo en pesos/total_ars ya
+  // presente en la serie. 'denom' apunta al campo de resumen_nacional con la
+  // suma de esa moneda específica entre las 21 actividades (ver
+  // build_resumen_nacional() en build_data.py).
+  function participMeta(cur){
+    if(cur==='pesos') return {field:'pesos_ars', denom:'pesos_ars_nacional', label:'en pesos'};
+    if(cur==='dolares') return {field:'dolares_usd', denom:'dolares_usd_nacional', label:'en dólares'};
+    return {field:'total_ars', denom:'total_ars_nacional', label:'total, equivalente en US$'};
+  }
+
+  // Gráfico histórico de participación: para cada trimestre de la ventana
+  // elegida, qué porcentaje del crédito agro total (en la moneda que esté
+  // seleccionada arriba) representa la actividad elegida. El denominador de
+  // cada trimestre es la suma de esa misma moneda entre las 21 actividades
+  // (resumen_nacional), no un valor fijo -- por eso el gráfico cambia tanto
+  // si se cambia de actividad como si se cambia de moneda.
+  function renderParticipChart(act){
+    const pm = participMeta(state.cur);
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const seriesVisible = act.series.slice(state.rangeStart, state.rangeEnd+1);
+    const rnVisible = RN.slice(state.rangeStart, state.rangeEnd+1);
+    const values = seriesVisible.map((s,i)=>{
+      const rn = rnVisible[i];
+      const num = s ? s[pm.field] : null;
+      const den = rn ? rn[pm.denom] : null;
+      if(num===null || num===undefined || !den) return null;
+      return num/den*100;
+    });
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--accent').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('participChart').getContext('2d');
+    if(participChart) participChart.destroy();
+    participChart = new Chart(ctx, {
+      type:'line',
+      data:{ labels, datasets:[{
+        label:'Participación',
+        data: values,
+        borderColor: accent, backgroundColor: accent, tension:.25, pointRadius:2, spanGaps:false,
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> c.raw!=null?fmtPct.format(c.raw)+'%':'sin dato' } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11}, maxRotation:0, autoSkip:true } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' }, beginAtZero:true }
+        }
+      }
+    });
+
+    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
+    document.getElementById('participChartDesc').innerHTML = 'Participación de <b>'+act.nombre+'</b> en el crédito agro total (<b>'+pm.label+'</b>), por trimestre, '+rangoLbl+'. Se calcula sobre el total de las '+DATA.actividades.length+' actividades, en la misma moneda elegida arriba.';
+  }
 
   function renderTiles(act){
     const meta = currencyMeta(state.cur);
@@ -519,6 +583,7 @@
 
     renderTiles(act);
     renderChart(act);
+    renderParticipChart(act);
     renderProvinceTable(act);
   }
 

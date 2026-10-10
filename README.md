@@ -429,6 +429,51 @@ trimestre del extremo derecho de la ventana:
   Una suba de tasa se marca en rojo (crédito más caro) y una baja en
   verde, mismo criterio de color que la tile "Costo efectivo" de Resumen.
 
+## Gráfico histórico de participación (Saldos, Oct-2026)
+
+Debajo del gráfico "Evolución trimestral del saldo" (pestaña Saldos) hay un
+segundo gráfico de línea, "Participación histórica en el crédito agro"
+(`renderParticipChart()`, canvas `#participChart`): muestra, para cada
+trimestre de la ventana de tiempo elegida, qué porcentaje del crédito agro
+total representa la actividad seleccionada. A diferencia de la tile
+"Participación en el crédito agro" (que es un único número, siempre en
+"total equivalente en US$", del trimestre del extremo derecho de la
+ventana -- ver sección anterior), este gráfico es una serie completa y
+**depende de la moneda elegida arriba** (`#curSeg`: Total / Pesos /
+Dólares), a pedido explícito de CONINAGRO:
+
+- **Total**: `act.series[i].total_ars / resumen_nacional[i].total_ars_nacional`
+  -- mismo cálculo que ya usaba la tile, extendido a toda la serie.
+- **Pesos**: `act.series[i].pesos_ars / resumen_nacional[i].pesos_ars_nacional`.
+- **Dólares**: `act.series[i].dolares_usd / resumen_nacional[i].dolares_usd_nacional`.
+
+Los denominadores `pesos_ars_nacional` y `dolares_usd_nacional` son
+campos nuevos en `resumen_nacional` (uno por trimestre, junto al ya
+existente `total_ars_nacional`), calculados en
+`build_resumen_nacional()` (`scripts/build_data.py`): la suma de
+`pesos_ars`/`dolares_usd` de las 21 actividades en ese trimestre, mismo
+criterio que ya usaba `total_ars_nacional` (lo no reportado por una
+actividad se trata como ausente, no como cero). Se eligió calcularlos en
+Python y guardarlos en el JSON -- en vez de sumarlos en el navegador en
+cada render -- para que el denominador de cada moneda se audite con el
+mismo rigor que el resto de `resumen_nacional` y quede disponible para
+cualquier otro uso futuro sin duplicar la lógica en `app.js`.
+
+**Verificación**: se comprobó, para los tres modos de moneda y los 46
+trimestres, que (a) sumar la participación de las 21 actividades da
+exactamente 100% en cada trimestre con dato, y (b) una recomputación
+independiente en Python -- sumando `pesos_ars`/`dolares_usd` directamente
+desde `actividades[].series`, sin reusar el código de `build_data.py` --
+coincide con `pesos_ars_nacional`/`dolares_usd_nacional` en los 46
+trimestres, sin excepciones. También se verificó en el navegador (vía
+Playwright) que los valores que efectivamente grafica Chart.js coinciden
+con un cálculo manual sobre el JSON para varias combinaciones de
+actividad/moneda.
+
+El gráfico respeta el slider de ventana de tiempo (igual que el resto de
+la vista Saldos) y se vuelve a dibujar tanto al cambiar de actividad como
+al cambiar de moneda o de ventana.
+
 ## Mapa de saldo (y de tasa) por provincia
 
 El panel "Saldo por provincia" (pestaña Saldos) y el panel "Tasa por
