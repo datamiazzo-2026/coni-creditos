@@ -55,13 +55,40 @@ en uso actualmente (no hay archivos .xlsx en data/source/); si se vuelve a
 usar, confirmá primero si sus montos ya vienen en pesos o también en miles
 antes de darlo por hecho.
 
-Si en un trimestre nuevo aparece alguna actividad que hoy está en la lista
-de "parciales" (PARTIAL_ACTS) con series completas, simplemente pasa a
-completarse sola: el script arma la serie con lo que encuentre fila a fila,
-no hace falta tocar las listas de actividades. La completitud
-(saldos_total_completo / saldos_moneda_completo / tasas_completo) se
-recalcula siempre sobre TODOS los períodos combinados, no hay que avisarle
-al script cuántos trimestres hay.
+Si en un trimestre nuevo aparece alguna actividad nueva con series completas,
+simplemente pasa a completarse sola: el script arma la serie con lo que
+encuentre fila a fila. La completitud (saldos_total_completo /
+saldos_moneda_completo / tasas_completo) se recalcula siempre sobre TODOS
+los períodos combinados, no hay que avisarle al script cuántos trimestres
+hay.
+
+IDENTIFICACIÓN DE ACTIVIDADES: por "Orden" BCRA, no por nombre de texto.
+El crudo BCRA trae TODAS las actividades económicas del país en un árbol
+CIIU/CLANAE de ~5 niveles, y cada fila tiene un número de "Orden" (columna
+A) que identifica unívocamente a esa actividad dentro del árbol -- ES
+ESTABLE en los 12 archivos fuente 2015-2026 (verificado fila a fila). Hasta
+Sep-2026 el script buscaba las actividades por coincidencia EXACTA del
+nombre de texto, pero eso se rompe en cuanto se quiere agregar una actividad
+cuyo nombre el BCRA reutiliza en otra parte del árbol: por ejemplo "Otros"
+aparece literalmente 5 veces (Orden 31 en ganadería, 43 en minería, 51 en
+industria, 67 en industria también, 118 en servicios) -- matchear por texto
+ahí mezclaría en silencio datos de categorías completamente distintas. Por
+eso `ACTIVITIES` (más abajo) define cada actividad de salida por su/sus
+número(s) de Orden, y `_validate_orden_labels` confirma en cada archivo que
+el texto de esa fila siga siendo el esperado (ORDEN_LABELS) antes de
+confiar en el número -- mismo patrón defensivo que `_validate_units_label`
+y `_validate_prov_columns`.
+
+ACTIVIDADES AGRUPADAS: una actividad de salida puede sumar más de un Orden
+(ej.: "Tabaco" = cultivo del tabaco + industria del tabaco; "Madera" =
+silvicultura + industria de la madera; "Otros pecuarios" = todo lo que
+queda de "Cría de ganado..." afuera de Bovino/Ovino/Porcino/Leche). En esos
+casos los SALDOS se suman (total y cada provincia), y las TASAS se
+promedian ponderando por el saldo de cada sub-actividad en esa misma
+moneda y período -- igual criterio que la tasa ponderada nacional de
+`build_resumen_nacional` -- nunca una suma ni un promedio simple, porque
+el peso de crédito de cada sub-actividad agrupada puede ser muy distinto.
+Ver `_merge_saldo_group` / `_merge_tasa_group`.
 """
 import json
 import re
@@ -78,42 +105,102 @@ PROVINCIAS = [
     'Santa Cruz', 'Santa Fe', 'Santiago del estero', 'Tierra del fuego', 'Tucumán',
 ]
 
-# Actividades con serie completa (4 trimestres, discriminadas por moneda) al
-# cierre de 2025. Se actualiza sola si en el futuro se completan las otras.
-COMPLETE_ACTS = [
-    'Cereales, oleaginosas y forrajeras',
-    'Frutas -excepto vid para vinificar- y nueces',
-    'Vid para vinificar',
-    'Tabaco',
-    'Bovino -excepto en cabañas y para la producción de leche-',
-    'Ovino -excepto en cabañas y para la producción de lana-',
-    'Porcino -excepto en cabañas-',
-    'Producción de leche (incluye la cría de ganado para la producción de leche)',
+# Texto esperado de cada Orden BCRA que usamos, para que _validate_orden_labels
+# pueda confirmar que el número sigue correspondiendo a la actividad que
+# creemos -- tal cual aparece en las columnas nom01..nom05 del crudo BCRA.
+ORDEN_LABELS = {
+    8: 'Cereales, oleaginosas y forrajeras',
+    9: 'Hortalizas, legumbres, flores y plantas ornamentales',
+    10: 'Frutas -excepto vid para vinificar- y nueces',
+    12: 'Plantas para la obtención de fibras',
+    13: 'Plantas sacaríferas',
+    14: 'Vid para vinificar',
+    16: 'Tabaco',
+    18: 'Otros cultivos industriales',
+    19: 'Producción de semillas y otras formas de propagación de cultivos agrícolas',
+    20: 'Servicios agrícolas',
+    23: 'Bovino -excepto en cabañas y para la producción de leche-',
+    24: 'Ovino -excepto en cabañas y para la producción de lana-',
+    25: 'Porcino -excepto en cabañas-',
+    26: 'Equino -excepto en haras- (incluye ganado equino para trabajo)',
+    27: 'Caprino -excepto en cabañas y para la producción de leche-',
+    28: 'En cabañas y haras (incluye la producción de semen)',
+    29: 'Producción de leche (incluye la cría de ganado para la producción de leche)',
+    30: 'Producción de lana y pelos de ganado',
+    31: 'Otros',
+    32: 'Servicios pecuarios (excepto los veterinarios)',
+    33: 'Producción de granja y cría de animales (excepto ganado)',
+    36: 'Silvicultura, extracción de madera y servicios conexos',
+    47: 'Producción y procesamiento de carne, pescado, frutas, legumbres, hortalizas, aceites y grasas',
+    48: 'Elaboración de productos lácteos',
+    49: 'Elaboración de productos de molinería, almidones y productos derivados del almidón; elaboración de alimentos preparados para animales',
+    68: 'Elaboración de productos de tabaco',
+    69: 'Producción de madera y fabricación de productos de madera y corcho (excepto muebles); fabricación de artículos de paja y de materiales trenzables',
+}
+
+# Actividades de salida que arma el dashboard. `ordenes`: uno o más Orden
+# BCRA que se suman (saldos) / promedian ponderado por saldo (tasas) para
+# formar esa tarjeta -- ver nota de "ACTIVIDADES AGRUPADAS" en el docstring.
+# Orden de la lista = orden en que aparecen en la barra lateral.
+ACTIVITIES = [
+    {'nombre': 'Cereales, oleaginosas y forrajeras', 'ordenes': [8]},
+    {'nombre': 'Hortalizas, legumbres, flores y plantas ornamentales', 'ordenes': [9]},
+    {'nombre': 'Frutas -excepto vid para vinificar- y nueces', 'ordenes': [10]},
+    {'nombre': 'Plantas para la obtención de fibras', 'ordenes': [12]},
+    {'nombre': 'Plantas sacaríferas', 'ordenes': [13]},
+    {'nombre': 'Vid para vinificar', 'ordenes': [14]},
+    {'nombre': 'Tabaco', 'ordenes': [16, 68]},  # cultivo (16) + industria del tabaco (68)
+    {'nombre': 'Otros cultivos industriales', 'ordenes': [18]},
+    {'nombre': 'Producción de semillas y otras formas de propagación de cultivos agrícolas', 'ordenes': [19]},
+    {'nombre': 'Servicios agrícolas', 'ordenes': [20]},
+    {'nombre': 'Bovino -excepto en cabañas y para la producción de leche-', 'ordenes': [23]},
+    {'nombre': 'Ovino -excepto en cabañas y para la producción de lana-', 'ordenes': [24]},
+    {'nombre': 'Porcino -excepto en cabañas-', 'ordenes': [25]},
+    {'nombre': 'Producción de leche (incluye la cría de ganado para la producción de leche)', 'ordenes': [29]},
+    # "Otros pecuarios" = todo lo que queda de "Cría de ganado..." afuera de
+    # Bovino/Ovino/Porcino/Leche (que ya son tarjetas propias): Equino,
+    # Caprino, En cabañas y haras, Producción de lana y pelos, y el "Otros"
+    # de esa categoría puntual (Orden 31 -- NO el de minería/industria/
+    # servicios, que comparten el mismo texto pero son Orden distinto).
+    {'nombre': 'Otros pecuarios', 'ordenes': [26, 27, 28, 30, 31]},
+    {'nombre': 'Servicios pecuarios (excepto los veterinarios)', 'ordenes': [32]},
+    {'nombre': 'Producción de granja y cría de animales (excepto ganado)', 'ordenes': [33]},
+    {'nombre': 'Madera', 'ordenes': [36, 69]},  # silvicultura (36) + industria de la madera (69)
+    {'nombre': 'Producción y procesamiento de carne, pescado, frutas, legumbres, hortalizas, aceites y grasas', 'ordenes': [47]},
+    {'nombre': 'Elaboración de productos lácteos', 'ordenes': [48]},
+    {'nombre': 'Elaboración de productos de molinería, almidones y productos derivados del almidón; elaboración de alimentos preparados para animales', 'ordenes': [49]},
 ]
-PARTIAL_ACTS = [
-    'Producción de granja y cría de animales (excepto ganado)',
-    'Producción y procesamiento de carne, pescado, frutas, legumbres, hortalizas, aceites y grasas',
-    'Elaboración de productos lácteos',
-    'Elaboración de productos de molinería, almidones y productos derivados del almidón; elaboración de alimentos preparados para animales',
-]
-ACT_NAMES = COMPLETE_ACTS + PARTIAL_ACTS
+ALL_ORDENES = {o for a in ACTIVITIES for o in a['ordenes']}
 
 ICONS = {
     'Cereales, oleaginosas y forrajeras': '🌾',
+    'Hortalizas, legumbres, flores y plantas ornamentales': '🥬',
     'Frutas -excepto vid para vinificar- y nueces': '🍎',
+    'Plantas para la obtención de fibras': '🧶',
+    'Plantas sacaríferas': '🍬',
     'Vid para vinificar': '🍇',
     'Tabaco': '🌿',
+    'Otros cultivos industriales': '🌱',
+    'Producción de semillas y otras formas de propagación de cultivos agrícolas': '🌰',
+    'Servicios agrícolas': '🚜',
     'Bovino -excepto en cabañas y para la producción de leche-': '🐄',
     'Ovino -excepto en cabañas y para la producción de lana-': '🐑',
     'Porcino -excepto en cabañas-': '🐖',
     'Producción de leche (incluye la cría de ganado para la producción de leche)': '🥛',
+    'Otros pecuarios': '🐐',
+    'Servicios pecuarios (excepto los veterinarios)': '🛠️',
     'Producción de granja y cría de animales (excepto ganado)': '🐓',
+    'Madera': '🌲',
     'Producción y procesamiento de carne, pescado, frutas, legumbres, hortalizas, aceites y grasas': '🥩',
     'Elaboración de productos lácteos': '🧀',
     'Elaboración de productos de molinería, almidones y productos derivados del almidón; elaboración de alimentos preparados para animales': '🌽',
 }
 SHORT_NAMES = {
+    'Hortalizas, legumbres, flores y plantas ornamentales': 'Hortalizas y flores',
     'Frutas -excepto vid para vinificar- y nueces': 'Frutas y nueces',
+    'Plantas para la obtención de fibras': 'Fibras (algodón, etc.)',
+    'Plantas sacaríferas': 'Plantas sacaríferas (azúcar)',
+    'Producción de semillas y otras formas de propagación de cultivos agrícolas': 'Semillas',
     'Bovino -excepto en cabañas y para la producción de leche-': 'Bovino',
     'Ovino -excepto en cabañas y para la producción de lana-': 'Ovino',
     'Porcino -excepto en cabañas-': 'Porcino',
@@ -122,6 +209,13 @@ SHORT_NAMES = {
     'Producción y procesamiento de carne, pescado, frutas, legumbres, hortalizas, aceites y grasas': 'Procesamiento de carnes y alimentos',
     'Elaboración de productos lácteos': 'Elaboración de lácteos',
     'Elaboración de productos de molinería, almidones y productos derivados del almidón; elaboración de alimentos preparados para animales': 'Molinería y alimento balanceado',
+}
+# Actividades agrupadas (más de un Orden sumado): nombre_completo propio que
+# aclara qué se está sumando, ya que ningún Orden individual usa ese texto.
+NOMBRE_COMPLETO_GRUPOS = {
+    'Tabaco': 'Tabaco (cultivo + elaboración de productos de tabaco)',
+    'Madera': 'Madera (silvicultura y extracción + industria de la madera)',
+    'Otros pecuarios': 'Otros pecuarios (equino, caprino, en cabañas y haras, lana y pelos, y otros -- no incluye bovino, ovino, porcino ni producción de leche, que ya son tarjetas propias)',
 }
 
 
@@ -298,11 +392,49 @@ def _validate_units_label(ws, needles=('thousand', 'miles')):
     )
 
 
-def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, check_sum=False,
-                         round_values=True, unit_multiplier=1):
-    """Lee la hoja cruda del BCRA y devuelve solo las filas de las 12
-    actividades agro (ACT_NAMES), en el mismo formato de record que
-    read_clean_sheet: {'actividad','periodo','moneda','total','provincias'[,'tc']}.
+def _validate_orden_labels(ws, ordenes_wanted):
+    """Para cada Orden que vamos a usar (ALL_ORDENES), confirma que el texto
+    de actividad de esa fila en el archivo siga siendo el que esperamos
+    (ORDEN_LABELS) -- mismo patrón que _validate_units_label y
+    _validate_prov_columns: si el BCRA alguna vez renumera el árbol de
+    actividades, el script frena acá en vez de mezclar en silencio datos de
+    una actividad equivocada bajo el mismo número de Orden."""
+    name_cols = [4, 5, 6, 7, 8]
+    header_row = _find_header_row(ws)
+    found = {}
+    for r in range(header_row + 1, ws.nrows):
+        orden = ws.cell_value(r, 0)
+        if orden in ordenes_wanted and orden not in found:
+            for c in name_cols:
+                v = ws.cell_value(r, c)
+                if isinstance(v, str) and v.strip():
+                    found[orden] = v.strip()
+                    break
+    for orden in ordenes_wanted:
+        expected = ORDEN_LABELS.get(int(orden))
+        if expected is None:
+            continue  # Orden sin label registrado -- no es motivo para frenar acá
+        actual = found.get(orden)
+        if actual != expected:
+            raise ValueError(
+                f"Orden {orden}: esperaba la actividad '{expected}' pero el "
+                f"archivo dice '{actual}'. El BCRA puede haber renumerado el "
+                "árbol de actividades -- revisá ORDEN_LABELS/ACTIVITIES antes "
+                "de confiar en estos datos."
+            )
+
+
+def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, ordenes_wanted, tc_col=None,
+                         check_sum=False, round_values=True, unit_multiplier=1):
+    """Lee la hoja cruda del BCRA y devuelve solo las filas cuyo Orden esté en
+    `ordenes_wanted` (ver ACTIVITIES/ALL_ORDENES), en el mismo formato de
+    record que read_clean_sheet más el campo 'orden':
+    {'orden','actividad','periodo','moneda','total','provincias'[,'tc']}.
+    'actividad' acá es el texto crudo de ESA fila puntual (solo para logs y
+    mensajes de error) -- la actividad de SALIDA que arma el dashboard se
+    resuelve después agrupando por Orden (ver _merge_saldo_group /
+    _merge_tasa_group en build()), porque una actividad de salida puede
+    sumar más de un Orden (ej. Tabaco = Orden 16 + Orden 68).
 
     check_sum=True agrega una segunda verificación, además de la de
     encabezados: que CABA + provincias sumen (aprox.) el total de la fila.
@@ -328,18 +460,20 @@ def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, chec
     if unit_multiplier != 1:
         _validate_units_label(ws)
     _validate_prov_columns(ws, prov_cols, header_rows)
+    _validate_orden_labels(ws, ordenes_wanted)
     header_row = _find_header_row(ws)
     name_cols = [4, 5, 6, 7, 8]  # nom01..nom05
     records = []
     for r in range(header_row + 1, ws.nrows):
+        orden = ws.cell_value(r, 0)
+        if orden not in ordenes_wanted:
+            continue
         act = None
         for c in name_cols:
             v = ws.cell_value(r, c)
-            if isinstance(v, str) and v.strip() in ACT_NAMES:
+            if isinstance(v, str) and v.strip():
                 act = v.strip()
                 break
-        if act is None:
-            continue
         per = ws.cell_value(r, 9)
         mon = ws.cell_value(r, 10)
         if per == '' or mon == '':
@@ -354,7 +488,7 @@ def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, chec
             else:
                 v = v * unit_multiplier
                 provs[p] = round(v) if round_values else v
-        rec = {'actividad': act, 'periodo': int(per), 'moneda': int(mon),
+        rec = {'orden': int(orden), 'actividad': act, 'periodo': int(per), 'moneda': int(mon),
                'total': (round(total) if round_values else total) if total is not None else None,
                'provincias': provs}
         if tc_col is not None:
@@ -363,18 +497,35 @@ def read_raw_bcra_sheet(ws, total_col, prov_cols, header_rows, tc_col=None, chec
         records.append(rec)
 
     if check_sum:
+        # Piso absoluto además del 1% relativo: al agregar actividades chicas
+        # y de nicho (ej. Caprino, Orden 27) aparecen un puñado de filas con
+        # un total de apenas $17.000-31.000 (miles de veces más chico que
+        # cualquier cifra real del dashboard, que opera en miles de millones)
+        # donde las provincias no suman exacto -- 2 de 3677 filas verificadas
+        # en los 12 archivos fuente, probablemente redondeo o enmascaramiento
+        # estadístico del BCRA en celdas muy chicas, no un error de columna:
+        # un mapeo de provincia realmente mal hecho desalinearía TODAS las
+        # filas de esa columna, no 2 puntuales de la actividad más chica del
+        # dataset. Por eso solo frena si la diferencia es grande en términos
+        # relativos Y ALSO en términos absolutos.
+        PISO_ABSOLUTO = 1_000_000  # $1.000.000 -- irrelevante a la escala del dashboard
         checked = 0
         for rec in records:
             vals = [v for v in rec['provincias'].values() if v is not None]
             if rec['total'] is None or len(vals) < len(rec['provincias']) - 2:
                 continue  # fila con demasiados huecos, no sirve para validar
             suma = sum(vals)
-            if rec['total'] and abs(suma - rec['total']) / abs(rec['total']) > 0.01:
+            if not rec['total']:
+                continue
+            diff_abs = abs(suma - rec['total'])
+            diff_rel = diff_abs / abs(rec['total'])
+            if diff_rel > 0.01 and diff_abs > PISO_ABSOLUTO:
                 raise ValueError(
-                    f"Las provincias de '{rec['actividad']}' ({rec['periodo']}, moneda {rec['moneda']}) "
-                    f"suman {suma:,.0f} pero el total de la columna es {rec['total']:,.0f} "
-                    "(más de 1% de diferencia). Puede haber una columna de provincia mal "
-                    "mapeada -- revisá prov_cols en read_raw_bcra_workbook."
+                    f"Las provincias de '{rec['actividad']}' (Orden {rec['orden']}, {rec['periodo']}, "
+                    f"moneda {rec['moneda']}) suman {suma:,.0f} pero el total de la columna es "
+                    f"{rec['total']:,.0f} (más de 1% de diferencia, y más de ${PISO_ABSOLUTO:,.0f} en "
+                    "términos absolutos). Puede haber una columna de provincia mal mapeada -- "
+                    "revisá prov_cols en read_raw_bcra_workbook."
                 )
             checked += 1
         if checked == 0:
@@ -409,10 +560,11 @@ def read_raw_bcra_workbook(path):
     header_rows_tasas = range(17, 25)
 
     saldos = read_raw_bcra_sheet(sh_saldos, total_col=12, prov_cols=saldos_prov_cols,
-                                  header_rows=header_rows_saldos, tc_col=11, check_sum=True,
-                                  unit_multiplier=1000)
+                                  header_rows=header_rows_saldos, ordenes_wanted=ALL_ORDENES,
+                                  tc_col=11, check_sum=True, unit_multiplier=1000)
     tasas = read_raw_bcra_sheet(sh_tasas, total_col=11, prov_cols=tasas_prov_cols,
-                                 header_rows=header_rows_tasas, tc_col=None, round_values=False)
+                                 header_rows=header_rows_tasas, ordenes_wanted=ALL_ORDENES,
+                                 tc_col=None, round_values=False)
     return saldos, tasas
 
 
@@ -423,6 +575,88 @@ def read_any_workbook(path):
     if ext == '.xls':
         return read_raw_bcra_workbook(path)
     raise ValueError(f"Formato no soportado: {path} (esperaba .xlsx o .xls)")
+
+
+# ---------------------------------------------------------------------------
+# Agrupar filas crudas (por Orden) en las actividades de salida del dashboard
+# ---------------------------------------------------------------------------
+#
+# A esta altura ya tenemos, por archivo fuente combinado, un dict de filas
+# crudas indexadas por (Orden, período, moneda) -- una fila por cada Orden
+# BCRA individual (ej.: Orden 16 "Tabaco" y Orden 68 "Elaboración de
+# productos de tabaco" son DOS filas separadas). Acá las agrupamos según
+# ACTIVITIES: para una actividad con un solo Orden esto es un passthrough
+# (la "suma"/"promedio ponderado" de un solo elemento es ese elemento), y
+# para una actividad agrupada (Tabaco, Madera, Otros pecuarios) suma los
+# saldos y promedia las tasas ponderando por saldo -- ver docstring del
+# módulo ("ACTIVIDADES AGRUPADAS").
+
+def _weighted_avg(pairs):
+    """pairs: lista de (tasa, peso). Promedio ponderado por peso; si ningún
+    peso es válido (0/None/falta el saldo), cae a promedio simple de las
+    tasas presentes; None si no hay ninguna tasa. Para una lista de un solo
+    elemento devuelve esa tasa sin alterarla (más allá de redondear a 2
+    decimales, que es la precisión con la que ya viene el dato del BCRA)."""
+    num = den = 0.0
+    vals = []
+    for tasa, peso in pairs:
+        if tasa is None:
+            continue
+        vals.append(tasa)
+        if peso:
+            num += tasa * peso
+            den += peso
+    if not vals:
+        return None
+    if den:
+        return round(num / den, 2)
+    return round(sum(vals) / len(vals), 2)
+
+
+def _merge_saldo_group(ordenes, idx_raw_saldos, per, mon):
+    """Suma total y cada provincia de los Orden de una actividad de salida,
+    para un período/moneda puntual. None si ninguno de los Orden tiene fila
+    ese período/moneda."""
+    rows = [idx_raw_saldos.get((o, per, mon)) for o in ordenes]
+    rows = [r for r in rows if r is not None]
+    if not rows:
+        return None
+    totals = [r['total'] for r in rows if r['total'] is not None]
+    total = sum(totals) if totals else None
+    provincias = {}
+    for prov in rows[0]['provincias'].keys():
+        vals = [r['provincias'].get(prov) for r in rows if r['provincias'].get(prov) is not None]
+        provincias[prov] = sum(vals) if vals else None
+    tcs = [r.get('tc') for r in rows if r.get('tc') is not None]
+    return {'total': total, 'provincias': provincias, 'tc': (tcs[0] if tcs else None)}
+
+
+def _merge_tasa_group(ordenes, idx_raw_tasas, idx_raw_saldos, per, mon, provincias_list):
+    """Tasa ponderada (nacional y por provincia) de una actividad de salida,
+    para un período/moneda puntual. Pondera por el saldo (SALDOS, misma
+    moneda/período) de cada Orden del grupo -- no por su propia tasa.
+    None si ningún Orden del grupo tiene tasa ese período/moneda."""
+    pairs_nac = []
+    for o in ordenes:
+        t = idx_raw_tasas.get((o, per, mon))
+        s = idx_raw_saldos.get((o, per, mon))
+        tasa = t['total'] if t else None
+        peso = s['total'] if (s and s.get('total')) else None
+        pairs_nac.append((tasa, peso))
+    total = _weighted_avg(pairs_nac)
+    if total is None:
+        return None
+    provincias = {}
+    for prov in provincias_list:
+        pairs_prov = []
+        for o in ordenes:
+            t = idx_raw_tasas.get((o, per, mon))
+            s = idx_raw_saldos.get((o, per, mon))
+            tasa = t['provincias'].get(prov) if t else None
+            peso = s['provincias'].get(prov) if s else None
+            pairs_prov.append((tasa, peso))
+        provincias[prov] = _weighted_avg(pairs_prov)
+    return {'total': total, 'provincias': provincias}
 
 
 # ---------------------------------------------------------------------------
@@ -543,16 +777,35 @@ def build(source_paths, out_path):
     periodos = sorted({r['periodo'] for r in saldos} | {r['periodo'] for r in tasas})
     periodos_label = {p: period_label(p) for p in periodos}
 
-    # Si un mismo (actividad, período, moneda) aparece en más de una fuente,
-    # gana la última fuente pasada en la línea de comando (los diccionarios
-    # de Python conservan la última asignación).
-    idx = {(r['actividad'], r['periodo'], r['moneda']): r for r in saldos}
-    idx_tasas = {(r['actividad'], r['periodo'], r['moneda']): r for r in tasas}
+    # Si un mismo (Orden, período, moneda) aparece en más de una fuente, gana
+    # la última fuente pasada en la línea de comando (los diccionarios de
+    # Python conservan la última asignación). Se indexa por Orden -- no por
+    # nombre de actividad -- porque es la clave real de cada fila del BCRA
+    # (ver docstring del módulo).
+    idx_raw_saldos = {(r['orden'], r['periodo'], r['moneda']): r for r in saldos}
+    idx_raw_tasas = {(r['orden'], r['periodo'], r['moneda']): r for r in tasas}
 
-    all_acts_found = {r['actividad'] for r in saldos} | {r['actividad'] for r in tasas}
-    ordered_acts = [a for a in COMPLETE_ACTS if a in all_acts_found] \
-        + [a for a in PARTIAL_ACTS if a in all_acts_found] \
-        + [a for a in all_acts_found if a not in COMPLETE_ACTS and a not in PARTIAL_ACTS]
+    # Agrupar por actividad de salida (ACTIVITIES): para cada actividad, cada
+    # período y cada moneda (0/1/2 para saldos, 1/2 para tasas), sumar o
+    # promediar-ponderado los Orden que la componen. `idx`/`idx_tasas` quedan
+    # con la MISMA forma que antes ({'total','provincias'[,'tc']} por
+    # (actividad, período, moneda)), así que todo el código de abajo
+    # (_province_breakdown, _tasas_province_breakdown, el armado de `series`)
+    # no necesita cambios.
+    idx, idx_tasas = {}, {}
+    for a in ACTIVITIES:
+        act, ordenes = a['nombre'], a['ordenes']
+        for per in periodos:
+            for mon in (0, 1, 2):
+                merged = _merge_saldo_group(ordenes, idx_raw_saldos, per, mon)
+                if merged is not None:
+                    idx[(act, per, mon)] = merged
+            for mon in (1, 2):
+                merged_t = _merge_tasa_group(ordenes, idx_raw_tasas, idx_raw_saldos, per, mon, PROVINCIAS)
+                if merged_t is not None:
+                    idx_tasas[(act, per, mon)] = merged_t
+
+    ordered_acts = [a['nombre'] for a in ACTIVITIES]
 
     out_acts = []
     for act in ordered_acts:
@@ -593,7 +846,7 @@ def build(source_paths, out_path):
         out_acts.append({
             'id': slugify(act),
             'nombre': SHORT_NAMES.get(act, act),
-            'nombre_completo': act,
+            'nombre_completo': NOMBRE_COMPLETO_GRUPOS.get(act, act),
             'icono': ICONS.get(act, '🌱'),
             'saldos_total_completo': saldos_total_completo,
             'saldos_moneda_completo': saldos_moneda_completo,
