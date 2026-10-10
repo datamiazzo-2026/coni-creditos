@@ -594,6 +594,59 @@ También se verificó en el navegador (Playwright) que la tasa real que
 efectivamente grafica Chart.js, para una actividad de prueba y varios
 trimestres, coincide con el cálculo manual de Fisher sobre el JSON.
 
+## Saldo en pesos constantes (Saldos, Oct-2026)
+
+El selector de moneda de la pestaña Saldos (`#curSeg`) tenía 3 opciones:
+Total (equivalente en US$), Pesos y Dólares. Se agregó una cuarta:
+**Pesos constantes**, que muestra el saldo total ajustado por inflación a
+precios del **último trimestre de la serie** (hoy Jun-26 -- se recalcula
+solo con cada actualización trimestral, nunca queda una fecha
+hardcodeada). Aplica al gráfico de evolución, las tiles y el mapa/ranking
+por provincia de Saldos -- no a la pestaña Resumen, que sigue siempre en
+pesos corrientes.
+
+### Metodología
+
+**Fuente**: `data/ipc_indice_mensual.csv` (140 filas, Ene-2015 a Ago-2026,
+columnas `anio,mes,ipc_indice`), extraído del Excel de índice de precios +
+factor de ajuste que pasó CONINAGRO. A diferencia de `data/ipc_mensual.csv`
+(variación % mensual, usado para la tasa real de la pestaña Tasas), este
+archivo trae el **índice de precios en nivel**, no la variación -- son dos
+fuentes independientes para dos features distintas.
+
+**Trimestral, no mensual**: como el saldo es un dato trimestral pero el
+índice viene mes a mes, cada trimestre se ajusta con el **promedio** del
+índice de sus 3 meses calendario (ej. el trimestre Mar-15 promedia
+enero+febrero+marzo de 2015), en vez del dato puntual del mes de cierre --
+así un mes particularmente volátil no distorsiona el ajuste de todo el
+trimestre. Función `_quarter_avg_ipc()` en `build_data.py`.
+
+**Factor**: para cada trimestre, `factor = promedio_del_último_trimestre /
+promedio_de_ese_trimestre` (función `build_pesos_constantes_factor()`). El
+último trimestre de la serie queda siempre con factor exactamente 1 -- su
+saldo en pesos constantes es idéntico al saldo en pesos corrientes, tal
+como pidió CONINAGRO ("el último valor no se va a haber modificado"). El
+campo nuevo es `total_ars_constante`, calculado para cada
+`actividades[].series[i]` y para cada provincia dentro de
+`actividades[].provincias_series[i]`.
+
+**Verificación**: se comparó el índice de este archivo contra
+`data/ipc_mensual.csv` (la otra fuente de inflación del dashboard, usada
+para la tasa real) para el período que ambos cubren (2015-2026): coinciden
+casi exactamente desde 2017 en adelante (diferencia menor a 0,05 puntos
+porcentuales mensuales, solo redondeo), pero difieren más en 2015-2016
+(hasta ~1,9 puntos porcentuales en un mes puntual) -- esperable, ya que esa
+fue la ventana en que INDEC estuvo intervenido y distintas fuentes
+reconstruyen esos meses de forma distinta. Se usó igualmente el archivo
+que pasó CONINAGRO para esta feature, tal como se indicó. Después de
+regenerar `dashboard_data.json`, un script independiente (que relee el CSV
+y recalcula el promedio trimestral y el factor con su propia lógica, sin
+reutilizar ninguna función de `build_data.py`) comparó `total_ars_constante`
+contra el valor esperado para las 21 actividades × 46 trimestres × todas
+las provincias (24.150 valores en total): 0 discrepancias, y se confirmó
+que el último trimestre (Jun-26) queda exactamente igual en las 21
+actividades.
+
 ## Mapa de saldo (y de tasa) por provincia
 
 El panel "Saldo por provincia" (pestaña Saldos) y el panel "Tasa por

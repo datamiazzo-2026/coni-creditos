@@ -32,9 +32,19 @@
     if(scale.div===1) return prefix + ' ' + fmtInt.format(v);
     return prefix + ' ' + fmt1.format(v/scale.div) + scale.suf;
   }
+  // "Pesos constantes": saldo total en pesos, ajustado por inflación a
+  // precios del ÚLTIMO trimestre de la serie (hoy Jun-26 -- se recalcula
+  // solo, usa PERIODOS[PERIODOS.length-1] en vez de tener la fecha
+  // hardcodeada). El ajuste lo hace build_data.py con el índice de precios
+  // de data/ipc_indice_mensual.csv (promedio de los 3 meses de cada
+  // trimestre), no el frontend -- acá solo se lee el campo ya calculado
+  // `total_ars_constante`. Por eso mismo trimestre el último valor de la
+  // serie queda siempre igual al saldo en pesos corrientes (factor 1).
   function currencyMeta(cur){
     if(cur==='pesos') return {prefix:'$', field:'pesos_ars', provField:'pesos_ars', label:'en pesos'};
     if(cur==='dolares') return {prefix:'US$', field:'dolares_usd', provField:'dolares_usd', label:'en dólares'};
+    if(cur==='constante') return {prefix:'$', field:'total_ars_constante', provField:'total_ars_constante',
+      label:'a precios constantes de '+PLABEL[PERIODOS[PERIODOS.length-1]]};
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
@@ -663,12 +673,17 @@
       noteEl.style.display = 'none';
     }
 
+    // "Pesos" y "Dólares" necesitan el desglose por moneda de la actividad
+    // (saldos_moneda_completo). "Total" y "Pesos constantes" se arman solo
+    // con el saldo total (saldos_total_completo, ya filtrado arriba antes
+    // de llegar acá), así que esos dos quedan habilitados aunque la
+    // actividad no tenga desglose por moneda.
     const segBtns = document.getElementById('curSeg').querySelectorAll('button');
+    const necesitaDesglose = (c)=> c==='pesos' || c==='dolares';
     segBtns.forEach(b=>{
-      const c = b.dataset.cur;
-      b.disabled = !act.saldos_moneda_completo && c!=='total';
+      b.disabled = !act.saldos_moneda_completo && necesitaDesglose(b.dataset.cur);
     });
-    if(!act.saldos_moneda_completo && state.cur!=='total'){
+    if(!act.saldos_moneda_completo && necesitaDesglose(state.cur)){
       state.cur = 'total';
       segBtns.forEach(b=>b.classList.toggle('active', b.dataset.cur==='total'));
     }
