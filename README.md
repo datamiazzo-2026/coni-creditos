@@ -474,6 +474,54 @@ El gráfico respeta el slider de ventana de tiempo (igual que el resto de
 la vista Saldos) y se vuelve a dibujar tanto al cambiar de actividad como
 al cambiar de moneda o de ventana.
 
+## Gráfico histórico de mix de monedas (Saldos, Oct-2026)
+
+Debajo del gráfico de participación hay un tercer gráfico de línea, "Mix
+de monedas en el tiempo" (`renderMixChart()`, canvas `#mixChart`): para
+cada trimestre de la ventana elegida, qué parte del saldo **de la
+actividad seleccionada** (no del crédito agro total -- eso lo cubre el
+gráfico de participación) está en pesos y qué parte está en dólares. Es
+la versión histórica, trimestre a trimestre, de la tile "Mix por moneda"
+(que sigue existiendo tal cual estaba: un único número agregado sobre
+toda la ventana elegida -- se mantuvieron las dos cosas, mismo criterio
+que ya se usó con la tile "Participación en el crédito agro" y su
+gráfico histórico).
+
+A diferencia del resto de la vista Saldos, este gráfico **no depende**
+del selector de moneda (`#curSeg`): mostrar "el mix entre pesos y
+dólares" fijado a una sola moneda no tendría sentido, así que siempre
+muestra las dos series juntas.
+
+- **% en pesos** = `pesos_ars / total_ars`.
+- **% en dólares** = `(dolares_usd * tc) / total_ars` -- el dólar se lleva
+  a su equivalente en pesos con el tipo de cambio de ESE mismo trimestre
+  antes de sacar el porcentaje, para que ambas series sumen ~100% del
+  saldo de la actividad (se apoya en que `total_ars = pesos_ars +
+  dolares_usd * tc`, identidad ya verificada en todo el dataset -- ver
+  más abajo).
+
+**Verificación**: se comprobó para las 21 actividades que
+`pesos_ars + dolares_usd*tc` reconstruye `total_ars` con un error relativo
+máximo de ~3,6×10⁻⁶% (redondeo de centavos, no un error real), y en el
+navegador (vía Playwright) que los valores que efectivamente grafica
+Chart.js para una actividad de prueba, en los 46 trimestres, coinciden
+con el cálculo manual sobre el JSON, y que ambas series suman ~100% en
+todos los puntos con dato.
+
+## Orden alfabético del listado de actividades (Oct-2026)
+
+El listado de actividades de la izquierda (`#actSidebar`, pestaña Saldos
+y Tasas) se muestra ordenado alfabéticamente (`a.nombre.localeCompare(b,
+'es', {sensitivity:'base'})`), a pedido de CONINAGRO -- antes seguía el
+orden de `DATA.actividades`, agrupado por rubro (agrícola, pecuario,
+agroindustrial), que no era obvio para quien no conoce esa clasificación.
+
+Importante: solo cambia el ORDEN VISUAL del listado. `renderPills()`
+arma una copia ordenada (`ACTIVIDADES_ALFABETICO`) y nunca reordena
+`DATA.actividades` -- el resto del dashboard (la actividad seleccionada
+por default, el orden en que se procesan los datos, etc.) no se ve
+afectado.
+
 ## Mapa de saldo (y de tasa) por provincia
 
 El panel "Saldo por provincia" (pestaña Saldos) y el panel "Tasa por

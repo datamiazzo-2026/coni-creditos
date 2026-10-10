@@ -139,9 +139,21 @@
   function getAct(id){ return DATA.actividades.find(a=>a.id===id); }
 
   // ---------- Activity sidebar ----------
+  // El orden de DATA.actividades (el que arma build_data.py, agrupado por
+  // rubro: agrícola, pecuario, agroindustrial) sigue siendo el que usan el
+  // resto de las vistas -- ej. el activo por default (DATA.actividades[0])
+  // o el orden de las barras en "Diferencial de cada actividad" de Resumen
+  // (que de todos modos se reordena por valor, no por esta lista). Acá, para
+  // el listado de la izquierda, se muestra una COPIA ordenada alfabéticamente
+  // (sensibilidad "base": ignora mayúsculas/acentos para no separar, por
+  // ejemplo, "Elaboración" de una hipotética "Elaboracion" sin tilde) --
+  // nunca se reordena el array original.
+  const ACTIVIDADES_ALFABETICO = DATA.actividades.slice()
+    .sort((a,b)=> a.nombre.localeCompare(b.nombre, 'es', {sensitivity:'base'}));
+
   function renderPills(container, onClick){
     container.innerHTML='';
-    DATA.actividades.forEach(a=>{
+    ACTIVIDADES_ALFABETICO.forEach(a=>{
       const b = document.createElement('button');
       b.className = 'sbrow' + (a.id===state.actId ? ' active':'');
       const limitada = !a.saldos_moneda_completo || !a.tasas_completo;
@@ -181,7 +193,7 @@
     renderTasaProvinceMap(getAct(state.actId));
   });
 
-  let evolChart, tasaChart, participChart;
+  let evolChart, tasaChart, participChart, mixChart;
 
   // Misma idea que currencyMeta(), pero para la participación en el crédito
   // agro total: a diferencia del resto de la vista Saldos (que en "Total"
@@ -245,6 +257,76 @@
 
     const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
     document.getElementById('participChartDesc').innerHTML = 'Participación de <b>'+act.nombre+'</b> en el crédito agro total (<b>'+pm.label+'</b>), por trimestre, '+rangoLbl+'. Se calcula sobre el total de las '+DATA.actividades.length+' actividades, en la misma moneda elegida arriba.';
+  }
+
+  // Mix de monedas en el tiempo: para cada trimestre de la ventana elegida,
+  // qué porcentaje del saldo DE ESTA ACTIVIDAD (no del total agro -- eso ya
+  // lo cubre renderParticipChart) está en pesos y qué porcentaje está en
+  // dólares. Es la versión histórica de la tile "Mix por moneda" (que sigue
+  // mostrando un único número, agregado sobre toda la ventana, igual que
+  // antes) -- acá se ve la serie completa, trimestre a trimestre. No depende
+  // de #curSeg (a diferencia del resto de la vista): mostrar "el mix entre
+  // pesos y dólares" no tiene sentido fijado a una sola moneda, así que este
+  // gráfico siempre muestra ambas series.
+  //
+  // % en pesos = pesos_ars / total_ars. % en dólares = (dolares_usd * tc) /
+  // total_ars -- es decir, el dólar se lleva a su equivalente en pesos con
+  // el tipo de cambio de ese mismo trimestre antes de sacar el porcentaje,
+  // para que las dos series sumen ~100% (mismo criterio que la tile "Mix por
+  // moneda" ya usaba, y que total_ars = pesos_ars + dolares_usd*tc en todo
+  // el dataset -- verificado independientemente).
+  function renderMixChart(act){
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const seriesVisible = act.series.slice(state.rangeStart, state.rangeEnd+1);
+    const pesosPct = seriesVisible.map(s=>{
+      if(!s || s.pesos_ars===null || s.pesos_ars===undefined || !s.total_ars) return null;
+      return s.pesos_ars/s.total_ars*100;
+    });
+    const dolaresPct = seriesVisible.map(s=>{
+      if(!s || s.dolares_usd===null || s.dolares_usd===undefined || s.tc===null || s.tc===undefined || !s.total_ars) return null;
+      return (s.dolares_usd*s.tc)/s.total_ars*100;
+    });
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--accent').trim();
+    const gold = styles.getPropertyValue('--gold').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('mixChart').getContext('2d');
+    if(mixChart) mixChart.destroy();
+    mixChart = new Chart(ctx, {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'Pesos', data: pesosPct, borderColor: accent, backgroundColor: accent, tension:.25, pointRadius:2, spanGaps:false },
+        { label:'Dólares', data: dolaresPct, borderColor: gold, backgroundColor: gold, tension:.25, pointRadius:2, spanGaps:false },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+(c.raw!=null?fmtPct.format(c.raw)+'%':'sin dato') } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11}, maxRotation:0, autoSkip:true } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' }, beginAtZero:true, max:100 }
+        }
+      }
+    });
+    const legendEl = document.getElementById('mixChartLegend');
+    legendEl.innerHTML =
+      '<span class="toggle" data-idx="0"><i style="background:'+accent+'"></i>Pesos</span>'
+      + '<span class="toggle" data-idx="1"><i style="background:'+gold+'"></i>Dólares</span>';
+    legendEl.querySelectorAll('.toggle').forEach(function(el){
+      el.onclick = function(){
+        const idx = Number(el.dataset.idx);
+        const visible = mixChart.isDatasetVisible(idx);
+        mixChart.setDatasetVisibility(idx, !visible);
+        mixChart.update();
+        el.classList.toggle('off', visible);
+      };
+    });
+
+    const rangoLbl = periodosVisible.length ? (PLABEL[periodosVisible[0]]+' a '+PLABEL[periodosVisible[periodosVisible.length-1]]) : '';
+    document.getElementById('mixChartDesc').innerHTML = 'Qué parte del saldo de <b>'+act.nombre+'</b> está en pesos y qué parte en dólares (llevado a pesos con el tipo de cambio de ese mismo trimestre), por trimestre, '+rangoLbl+'. Las dos series suman ~100% del saldo de la actividad.';
   }
 
   function renderTiles(act){
@@ -584,6 +666,7 @@
     renderTiles(act);
     renderChart(act);
     renderParticipChart(act);
+    renderMixChart(act);
     renderProvinceTable(act);
   }
 
