@@ -173,6 +173,74 @@ ACTIVITIES = [
 ]
 ALL_ORDENES = {o for a in ACTIVITIES for o in a['ordenes']}
 
+# ---------------------------------------------------------------------------
+# Sectores macro de la economía (Resumen, Oct-2026): composición del crédito
+# total, no solo agro.
+#
+# Mismos 12 archivos crudos del BCRA que ya usamos para ACTIVITIES: además de
+# las ~27 Orden de detalle que arman las 21 actividades agro, el crudo trae
+# filas de DIVISIÓN (nivel superior del árbol CIIU/CLANAE) con el total YA
+# AGREGADO de cada división -- no hace falta sumar los Orden hijos a mano.
+# SECTOR_ORDEN_LABELS identifica esas filas con el mismo patrón defensivo que
+# ORDEN_LABELS (ver _validate_orden_labels): si el BCRA alguna vez renumera
+# el árbol, el script frena en vez de mezclar en silencio datos de otra
+# división bajo el mismo número.
+#
+# "Agro" (la porción que ya muestra el resto del dashboard) cae dentro de DOS
+# divisiones del BCRA: Producción primaria (Orden 4: agricultura, ganadería,
+# pesca Y minería) e Industria manufacturera (Orden 45: TODA la industria,
+# no solo la agroalimentaria). Para que las porciones de la torta sean
+# mutuamente excluyentes y sumen EXACTO el total de la economía, cada una de
+# esas dos divisiones se parte en "la parte que ya cuentan las 21 actividades
+# de ACTIVITIES" (AGRO_ORDENES_PRIMARIA / AGRO_ORDENES_MANUFACTURA -- la
+# misma partición de ALL_ORDENES según a qué división del BCRA pertenece
+# cada Orden) y "el resto de esa división".
+#
+# "Discrepancia estadística" (Orden 124) NO es una división ni se suma al
+# total: se probó numéricamente (ver independent_verify_sectores) que el
+# Total de actividades económicas (Orden 125) ya coincide, con las 46
+# combinaciones trimestre×archivo fuente (2015-2026), con la suma de las 8
+# divisiones solas (1,2,4,45,80,87,89,94) -- diferencia relativa máxima
+# 2e-8 (redondeo). Sumarle además la discrepancia rompe esa reconciliación
+# (la "resta" dos veces), así que queda directamente afuera de la torta.
+SECTOR_ORDEN_LABELS = {
+    1: 'No identificada',
+    2: 'Personas físicas en relación de dependencia laboral',
+    4: 'Producción primaria',
+    45: 'Industria manufacturera',
+    80: 'Electricidad, gas y agua',
+    87: 'Construcción',
+    89: 'Comercio al por mayor y al por menor: reparación de vehículos automotores, motocicletas, efectos personales y enseres domésticos',
+    94: 'Servicios',
+}
+SECTOR_ORDENES = set(SECTOR_ORDEN_LABELS)
+# _validate_orden_labels valida contra ORDEN_LABELS (un solo dict, reusado
+# por ambas lecturas de la hoja Saldos -- actividades de detalle y
+# divisiones macro), así que las etiquetas de los sectores se suman ahí.
+ORDEN_LABELS.update(SECTOR_ORDEN_LABELS)
+
+# Partición de ALL_ORDENES (las Orden de detalle de las 21 actividades agro)
+# según a cuál de las dos divisiones de arriba pertenece cada una.
+AGRO_ORDENES_PRIMARIA = {8, 9, 10, 12, 13, 14, 16, 18, 19, 20, 23, 24, 25,
+                          26, 27, 28, 29, 30, 31, 32, 33, 36}
+AGRO_ORDENES_MANUFACTURA = {47, 48, 49, 68, 69}
+assert AGRO_ORDENES_PRIMARIA | AGRO_ORDENES_MANUFACTURA == ALL_ORDENES, \
+    "AGRO_ORDENES_PRIMARIA/MANUFACTURA tienen que particionar ALL_ORDENES exacto"
+assert not (AGRO_ORDENES_PRIMARIA & AGRO_ORDENES_MANUFACTURA)
+
+# Etiquetas de cada porción de la torta (orden = orden en la leyenda/torta).
+SECTOR_LABELS = {
+    'agro': 'Agro',
+    'primaria_no_agro': 'Resto de producción primaria (pesca y minería)',
+    'industria_no_agro': 'Industria manufacturera',
+    'electricidad_gas_agua': 'Electricidad, gas y agua',
+    'construccion': 'Construcción',
+    'comercio': 'Comercio',
+    'servicios': 'Servicios',
+    'personas_fisicas': 'Personas físicas (créditos de consumo)',
+    'no_identificada': 'No identificada',
+}
+
 ICONS = {
     'Cereales, oleaginosas y forrajeras': '🌾',
     'Hortalizas, legumbres, flores y plantas ornamentales': '🥬',
@@ -560,8 +628,12 @@ def read_raw_bcra_workbook(path):
     header_rows_saldos = range(5, 12)
     header_rows_tasas = range(17, 25)
 
+    # SALDOS también trae las filas de SECTOR_ORDENES (divisiones macro de
+    # la economía, para el gráfico de composición del crédito total de
+    # Resumen) además de las Orden de detalle de ACTIVITIES -- TASAS no las
+    # necesita (el gráfico de sectores es de saldos, no de tasa de interés).
     saldos = read_raw_bcra_sheet(sh_saldos, total_col=12, prov_cols=saldos_prov_cols,
-                                  header_rows=header_rows_saldos, ordenes_wanted=ALL_ORDENES,
+                                  header_rows=header_rows_saldos, ordenes_wanted=ALL_ORDENES | SECTOR_ORDENES,
                                   tc_col=11, check_sum=True, unit_multiplier=1000)
     tasas = read_raw_bcra_sheet(sh_tasas, total_col=11, prov_cols=tasas_prov_cols,
                                  header_rows=header_rows_tasas, ordenes_wanted=ALL_ORDENES,
@@ -793,6 +865,58 @@ def build_resumen_nacional(periodos, out_acts, ipc=None):
             r['var_tc_interanual'] = None
             r['costo_efectivo_dolares'] = None
     return resumen
+
+
+def build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional):
+    """Composición del crédito total de la economía por sector, para el
+    gráfico de torta + corredor de tiempo de la pestaña Resumen (ver bloque
+    SECTOR_ORDEN_LABELS/SECTOR_ORDENES más arriba para la metodología
+    completa). Devuelve una lista paralela a `periodos` (None en los
+    períodos sin datos completos de alguna división), cada entrada con el
+    saldo de cada sector -- moneda 0 (Total: pesos + dólares en pesos,
+    misma convención que total_ars_nacional de build_resumen_nacional) -- y
+    el total de la economía en ese período (debe coincidir casi exacto con
+    la suma de los 9 sectores; verificado independientemente, ver
+    independent_verify_sectores.py).
+
+    "Agro" se toma directamente de total_ars_nacional (ya calculado por
+    build_resumen_nacional sumando total_ars de las 21 actividades) en vez
+    de re-sumar los Orden agro acá -- mismo número exacto que el resto del
+    dashboard, por construcción, sin dos implementaciones que puedan
+    divergir."""
+    out = []
+    for i, per in enumerate(periodos):
+        def _v(orden):
+            r = idx_raw_saldos.get((orden, per, 0))
+            return r['total'] if (r and r['total'] is not None) else None
+
+        macro = {o: _v(o) for o in SECTOR_ORDENES}
+        if any(v is None for v in macro.values()):
+            out.append(None)
+            continue
+
+        agro = resumen_nacional[i]['total_ars_nacional']
+        if not agro:
+            out.append(None)
+            continue
+
+        agro_primaria = sum((_v(o) or 0) for o in AGRO_ORDENES_PRIMARIA)
+        agro_manufactura = sum((_v(o) or 0) for o in AGRO_ORDENES_MANUFACTURA)
+
+        sectores = {
+            'agro': agro,
+            'primaria_no_agro': macro[4] - agro_primaria,
+            'industria_no_agro': macro[45] - agro_manufactura,
+            'electricidad_gas_agua': macro[80],
+            'construccion': macro[87],
+            'comercio': macro[89],
+            'servicios': macro[94],
+            'personas_fisicas': macro[2],
+            'no_identificada': macro[1],
+        }
+        total_economia = sum(sectores.values())
+        out.append({'periodo': per, 'sectores': sectores, 'total_economia': round(total_economia)})
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1046,10 +1170,12 @@ def build(source_paths, out_path):
 
     # `ipc` ya se cargó más arriba (se usa también para pesos_constantes_factor).
     resumen_nacional = build_resumen_nacional(periodos, out_acts, ipc=ipc)
+    resumen_sectores = build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional)
 
     data = {'periodos': periodos, 'periodos_label': periodos_label,
             'provincias': PROVINCIAS, 'actividades': out_acts,
-            'resumen_nacional': resumen_nacional}
+            'resumen_nacional': resumen_nacional,
+            'resumen_sectores': resumen_sectores, 'sector_labels': SECTOR_LABELS}
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
