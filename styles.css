@@ -139,10 +139,19 @@
      ese botón del selector de moneda -- ver seg-item.onmouseenter/click en
      app.js. Se abre hacia ABAJO del botón (no hacia arriba): el selector
      de moneda está pegado al borde superior del contenido, justo debajo
-     del header -- abrir hacia arriba lo tapaba contra el header.*/
+     del header -- abrir hacia arriba lo tapaba contra el header.
+     La posición horizontal la calcula initConstanteTooltip() en app.js (no
+     un breakpoint fijo acá): como ".segmented" ahora hace flex-wrap, este
+     botón puede terminar pegado al borde izquierdo de la pantalla (si pasó
+     a su propia fila) o bien a la derecha del resto de los botones (si
+     entró en la misma fila) según cuánto ancho tenga el panel en cada
+     momento -- varía incluso entre 390px y 760px de viewport, no es un
+     único "modo mobile". --left/--arrow-left son las variables que fija esa
+     función; el valor de acá (50%) es solo el default antes de la primera
+     medición. */
   .seg-item{position:relative; display:inline-flex;}
   .seg-tooltip{
-    position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%);
+    position:absolute; top:calc(100% + 9px); left:var(--tooltip-left, 50%); transform:var(--tooltip-transform, translateX(-50%));
     width:250px; max-width:calc(100vw - 32px);
     background:var(--surface); color:var(--text); border:1px solid var(--border-strong);
     border-radius:var(--radius-md); box-shadow:var(--shadow); padding:11px 13px;
@@ -153,14 +162,10 @@
   .seg-tooltip.visible{opacity:1; visibility:visible;}
   .seg-tooltip b{display:block; margin-bottom:3px; color:var(--text);}
   .seg-tooltip::after{
-    content:''; position:absolute; bottom:100%; left:50%; transform:translateX(-50%) rotate(45deg);
+    content:''; position:absolute; bottom:100%; left:var(--arrow-left, 50%); transform:translateX(-50%) rotate(45deg);
     width:9px; height:9px; background:var(--surface);
     border-left:1px solid var(--border-strong); border-top:1px solid var(--border-strong);
     margin-bottom:-5px;
-  }
-  @media (max-width:480px){
-    .seg-tooltip{left:auto; right:-10px; transform:none;}
-    .seg-tooltip::after{left:auto; right:20px; transform:rotate(45deg);}
   }
 
   .partialnote{
@@ -190,6 +195,12 @@
   .panel h2{font-size:15px; font-weight:700; margin:0 0 2px;}
   .panelhead{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
   .panelhead > *{min-width:0;}
+  /* Paneles de Tasas (estilo narrativo): el título pasó a ser el <h2> de la
+     sección (fuera del panel), así que acá adentro el panelhead a veces
+     tiene un solo hijo (el selector Nominal/Real o Pesos/Dólares) -- este
+     modificador lo manda al extremo derecho en vez de dejarlo pegado a la
+     izquierda por default de space-between con un solo elemento. */
+  .panelhead.end{justify-content:flex-end;}
   .panel .desc{font-size:12.5px; color:var(--text-muted); margin-bottom:14px;}
   .panel .desc b{color:var(--text);}
 

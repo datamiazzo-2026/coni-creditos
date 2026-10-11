@@ -36,129 +36,179 @@
 
   <div id="view-saldos">
 
-    <div class="toolbar">
-      <div class="segmented" id="curSeg">
-        <button data-cur="total" class="active">Total (US$ equiv.)</button>
-        <button data-cur="pesos">Pesos ($)</button>
-        <button data-cur="dolares">Dólares (US$)</button>
-        <span class="seg-item">
-          <button data-cur="constante">Pesos constantes</button>
-          <div class="seg-tooltip" id="constanteTooltip" role="tooltip"></div>
-        </span>
-      </div>
-    </div>
+    <nav class="resumen-nav" id="saldosNav">
+      <a href="#saldos-panorama" class="active">Panorama</a>
+      <a href="#saldos-evolucion">Evolución</a>
+      <a href="#saldos-participacion">Participación</a>
+      <a href="#saldos-monedas">Monedas</a>
+      <a href="#saldos-provincias">Provincias</a>
+    </nav>
 
-    <div id="partialNoteSaldos" class="partialnote" style="display:none;">
-      ⚠️ <div id="partialNoteSaldosText"></div>
-    </div>
+    <section class="resumen-section" id="saldos-panorama">
+      <div class="resumen-eyebrow">Panorama</div>
+      <h2>¿Cuánto crédito recibe esta actividad?</h2>
+      <div class="resumen-lede">Saldo de la actividad elegida en el panel de la izquierda, en la moneda que elijas abajo. Incluye su variación en la ventana de tiempo y su participación dentro del crédito agro total.</div>
 
-    <div class="tiles" id="tiles"></div>
-
-    <div class="panel">
-      <h2>Evolución trimestral del saldo</h2>
-      <div class="desc" id="chartDesc"></div>
-      <div class="legend" id="chartLegend"></div>
-      <div class="chartwrap"><canvas id="evolChart"></canvas></div>
-    </div>
-
-    <div class="panel">
-      <h2>Participación histórica en el crédito agro</h2>
-      <div class="desc" id="participChartDesc"></div>
-      <div class="chartwrap"><canvas id="participChart"></canvas></div>
-    </div>
-
-    <div class="panel">
-      <h2>Mix de monedas en el tiempo</h2>
-      <div class="desc" id="mixChartDesc"></div>
-      <div class="legend" id="mixChartLegend"></div>
-      <div class="chartwrap"><canvas id="mixChart"></canvas></div>
-    </div>
-
-    <div id="rangeSlot-saldos">
-      <div class="panel rangepanel">
-        <div class="rangehead">
-          <h2>Ventana de tiempo</h2>
-          <div class="rangevalue mono" id="rangeValueLabel">—</div>
-        </div>
-        <div class="desc">Arrastrá los extremos para acotar el período que se ve en los gráficos.</div>
-        <div class="rangeslider">
-          <div class="rangetrack"><div class="rangefill" id="rangeFill"></div></div>
-          <input type="range" id="rangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
-          <input type="range" id="rangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
+      <div class="toolbar">
+        <div class="segmented" id="curSeg">
+          <button data-cur="total" class="active">Total (US$ equiv.)</button>
+          <button data-cur="pesos">Pesos ($)</button>
+          <button data-cur="dolares">Dólares (US$)</button>
+          <span class="seg-item">
+            <button data-cur="constante">Pesos constantes</button>
+            <div class="seg-tooltip" id="constanteTooltip" role="tooltip"></div>
+          </span>
         </div>
       </div>
-    </div>
 
-    <div class="panel">
-      <h2>Saldo por provincia</h2>
-      <div class="desc" id="provDesc"></div>
-      <div class="provgrid">
-        <div class="provmapwrap">
-          <div class="provmap" id="provMap"></div>
-          <div class="provlegend" id="provLegend"></div>
-        </div>
-        <div class="tablewrap provlistwrap">
-          <table>
-            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
-            <tbody id="provBody"></tbody>
-          </table>
+      <div id="partialNoteSaldos" class="partialnote" style="display:none;">
+        ⚠️ <div id="partialNoteSaldosText"></div>
+      </div>
+
+      <div class="tiles" id="tiles"></div>
+
+      <div id="rangeSlot-saldos">
+        <div class="panel rangepanel">
+          <div class="rangehead">
+            <h2>Ventana de tiempo</h2>
+            <div class="rangevalue mono" id="rangeValueLabel">—</div>
+          </div>
+          <div class="desc">Arrastrá los extremos para acotar el período que se ve en los gráficos.</div>
+          <div class="rangeslider">
+            <div class="rangetrack"><div class="rangefill" id="rangeFill"></div></div>
+            <input type="range" id="rangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
+            <input type="range" id="rangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
+          </div>
         </div>
       </div>
-      <div class="provtooltip" id="provTooltip" style="display:none;"></div>
-    </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-evolucion">
+      <div class="resumen-eyebrow">Evolución</div>
+      <h2>¿Cómo viene evolucionando el saldo?</h2>
+      <div class="resumen-lede" id="chartDesc"></div>
+      <div class="panel">
+        <div class="legend" id="chartLegend"></div>
+        <div class="chartwrap"><canvas id="evolChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-participacion">
+      <div class="resumen-eyebrow">Participación</div>
+      <h2>¿Qué peso tiene dentro del crédito agro?</h2>
+      <div class="resumen-lede" id="participChartDesc"></div>
+      <div class="panel">
+        <div class="chartwrap"><canvas id="participChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-monedas">
+      <div class="resumen-eyebrow">Monedas</div>
+      <h2>¿En qué moneda está tomado el crédito?</h2>
+      <div class="resumen-lede" id="mixChartDesc"></div>
+      <div class="panel">
+        <div class="legend" id="mixChartLegend"></div>
+        <div class="chartwrap"><canvas id="mixChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-provincias">
+      <div class="resumen-eyebrow">Provincias</div>
+      <h2>¿Dónde está el crédito?</h2>
+      <div class="resumen-lede" id="provDesc"></div>
+      <div class="panel">
+        <div class="provgrid">
+          <div class="provmapwrap">
+            <div class="provmap" id="provMap"></div>
+            <div class="provlegend" id="provLegend"></div>
+          </div>
+          <div class="tablewrap provlistwrap">
+            <table>
+              <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+              <tbody id="provBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="provtooltip" id="provTooltip" style="display:none;"></div>
+      </div>
+    </section>
+
   </div>
 
   <div id="view-tasas" style="display:none;">
 
-    <div id="partialNoteTasas" class="partialnote" style="display:none;">
-      ⚠️ <div id="partialNoteTasasText"></div>
-    </div>
+    <nav class="resumen-nav" id="tasasNav">
+      <a href="#tasas-panorama" class="active">Panorama</a>
+      <a href="#tasas-pesos">Tasa en pesos</a>
+      <a href="#tasas-dolares">Tasa en dólares</a>
+      <a href="#tasas-provincias">Provincias</a>
+    </nav>
 
-    <div class="tiles" id="tasaTiles"></div>
+    <section class="resumen-section" id="tasas-panorama">
+      <div class="resumen-eyebrow">Panorama</div>
+      <h2>¿A qué tasa se financia esta actividad?</h2>
+      <div class="resumen-lede">Tasa nacional vigente para la actividad elegida, en pesos y en dólares, con su variación contra el trimestre anterior.</div>
 
-    <div class="panel">
-      <div class="panelhead">
-        <h2>Tasa en pesos</h2>
-        <div class="segmented" id="tasaPesosModeSeg">
-          <button data-mode="nominal" class="active">Nominal</button>
-          <button data-mode="real">Real</button>
-        </div>
+      <div id="partialNoteTasas" class="partialnote" style="display:none;">
+        ⚠️ <div id="partialNoteTasasText"></div>
       </div>
-      <div class="desc" id="tasaPesosDesc">Tasa nominal anual en pesos, por trimestre.</div>
-      <div class="chartwrap"><canvas id="tasaPesosChart"></canvas></div>
-    </div>
 
-    <div class="panel">
-      <h2>Tasa en dólares</h2>
-      <div class="desc">Tasa nominal anual en dólares, por trimestre.</div>
-      <div class="chartwrap"><canvas id="tasaDolaresChart"></canvas></div>
-    </div>
+      <div class="tiles" id="tasaTiles"></div>
 
-    <div id="rangeSlot-tasas"></div>
+      <div id="rangeSlot-tasas"></div>
+    </section>
 
-    <div class="panel">
-      <div class="panelhead">
-        <h2>Tasa por provincia</h2>
-        <div class="segmented" id="tasaProvCurSeg">
-          <button data-cur="pesos" class="active">Pesos ($)</button>
-          <button data-cur="dolares">Dólares (US$)</button>
+    <section class="resumen-section" id="tasas-pesos">
+      <div class="resumen-eyebrow">Tasa en pesos</div>
+      <h2>¿Cuánto cuesta financiarse en pesos?</h2>
+      <div class="resumen-lede" id="tasaPesosDesc">Tasa nominal anual en pesos, por trimestre.</div>
+      <div class="panel">
+        <div class="panelhead end">
+          <div class="segmented" id="tasaPesosModeSeg">
+            <button data-mode="nominal" class="active">Nominal</button>
+            <button data-mode="real">Real</button>
+          </div>
         </div>
+        <div class="chartwrap"><canvas id="tasaPesosChart"></canvas></div>
       </div>
-      <div class="desc" id="tasaProvDesc"></div>
-      <div class="provgrid">
-        <div class="provmapwrap">
-          <div class="provmap" id="tasaProvMap"></div>
-          <div class="provlegend" id="tasaProvLegend"></div>
-        </div>
-        <div class="tablewrap provlistwrap">
-          <table>
-            <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
-            <tbody id="tasaProvBody"></tbody>
-          </table>
-        </div>
+    </section>
+
+    <section class="resumen-section" id="tasas-dolares">
+      <div class="resumen-eyebrow">Tasa en dólares</div>
+      <h2>¿Cuánto cuesta financiarse en dólares?</h2>
+      <div class="resumen-lede">Tasa nominal anual en dólares, por trimestre.</div>
+      <div class="panel">
+        <div class="chartwrap"><canvas id="tasaDolaresChart"></canvas></div>
       </div>
-      <div class="provtooltip" id="tasaProvTooltip" style="display:none;"></div>
-    </div>
+    </section>
+
+    <section class="resumen-section" id="tasas-provincias">
+      <div class="resumen-eyebrow">Provincias</div>
+      <h2>¿Dónde es más cara (o más barata) la tasa?</h2>
+      <div class="resumen-lede" id="tasaProvDesc"></div>
+      <div class="panel">
+        <div class="panelhead end">
+          <div class="segmented" id="tasaProvCurSeg">
+            <button data-cur="pesos" class="active">Pesos ($)</button>
+            <button data-cur="dolares">Dólares (US$)</button>
+          </div>
+        </div>
+        <div class="provgrid">
+          <div class="provmapwrap">
+            <div class="provmap" id="tasaProvMap"></div>
+            <div class="provlegend" id="tasaProvLegend"></div>
+          </div>
+          <div class="tablewrap provlistwrap">
+            <table>
+              <thead><tr><th style="width:36px"></th><th>Provincia</th><th class="num">Tasa</th></tr></thead>
+              <tbody id="tasaProvBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="provtooltip" id="tasaProvTooltip" style="display:none;"></div>
+      </div>
+    </section>
+
   </div>
 
   <div id="view-resumen" style="display:none;">

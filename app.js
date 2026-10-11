@@ -213,6 +213,29 @@
     const labelLargo = (MESES_LARGOS[perStr.slice(4,6)] || perStr.slice(4,6)) + ' de ' + perStr.slice(0,4);
     tip.innerHTML = '<b>¿Qué es "Pesos constantes"?</b>Significa descontar la inflación: cada valor histórico se muestra como si estuviera expresado en pesos de <b>'+labelLargo+'</b>.';
 
+    // Posición horizontal: en vez de un breakpoint fijo (el botón puede
+    // terminar pegado a la izquierda o a la derecha según cuánto ancho tenga
+    // el panel en cada momento, porque ".segmented" hace flex-wrap -- ver
+    // comentario en styles.css), se mide la posición real del botón cada vez
+    // que el cuadro está por abrirse y se centra el cuadro debajo de él,
+    // recortando contra los bordes de la pantalla si no entra. La flechita
+    // (::after) se corrige aparte para que siga apuntando al botón real aunque
+    // el cuadro se haya corrido para no salirse de la pantalla.
+    function positionTooltip(){
+      const wrapRect = wrap.getBoundingClientRect();
+      const tipWidth = tip.getBoundingClientRect().width;
+      const pad = 16;
+      const idealCenter = wrapRect.left + wrapRect.width/2;
+      const idealLeft = idealCenter - tipWidth/2;
+      const maxLeft = window.innerWidth - tipWidth - pad;
+      const clampedLeft = Math.max(pad, Math.min(idealLeft, Math.max(pad, maxLeft)));
+      tip.style.setProperty('--tooltip-left', (clampedLeft - wrapRect.left) + 'px');
+      tip.style.setProperty('--tooltip-transform', 'none');
+      const arrowMin = 14, arrowMax = tipWidth - 14;
+      const arrowLeft = Math.max(arrowMin, Math.min(idealCenter - clampedLeft, arrowMax));
+      tip.style.setProperty('--arrow-left', arrowLeft + 'px');
+    }
+
     let hideTimer = null;
     // Al tocar un botón, el navegador también le da foco como parte del tap
     // (se ve un "click" disparado unos ms después del touchstart, que mueve
@@ -224,7 +247,7 @@
     // se ignoran mientras touchLock esté activo: en touch, el touchstart ya
     // se encarga de mostrar y de programar su propio cierre.
     let touchLock = false;
-    function show(){ clearTimeout(hideTimer); tip.classList.add('visible'); }
+    function show(){ clearTimeout(hideTimer); positionTooltip(); tip.classList.add('visible'); }
     function hide(delay){ clearTimeout(hideTimer); hideTimer = setTimeout(()=> tip.classList.remove('visible'), delay || 0); }
     wrap.addEventListener('mouseenter', ()=>{ if(!touchLock) show(); });
     wrap.addEventListener('mouseleave', ()=>{ if(!touchLock) hide(0); });
@@ -1253,13 +1276,14 @@
     renderSectoresChart();
   }
 
-  // Nav pegajoso de Resumen: resalta la sección visible a medida que se
-  // baja, usando IntersectionObserver en vez de un listener de scroll.
-  // Al estar #view-resumen en display:none mientras no es la pestaña
-  // activa, no observa nada hasta que el usuario entra a esa pestaña y
-  // hace scroll -- no hace falta reiniciarlo al cambiar de pestaña.
-  (function initResumenNav(){
-    const nav = document.getElementById('resumenNav');
+  // Nav pegajosa de cada pestaña (Saldos, Tasas y Resumen comparten el mismo
+  // patrón: hilo narrativo con una pregunta por sección) -- resalta la
+  // sección visible a medida que se baja, usando IntersectionObserver en vez
+  // de un listener de scroll. Mientras la pestaña no es la activa, su
+  // #view-* está en display:none y no observa nada -- no hace falta
+  // reiniciarlo al cambiar de pestaña.
+  function initNarrativeNav(navId, tabName){
+    const nav = document.getElementById(navId);
     if(!nav) return;
     const links = [...nav.querySelectorAll('a[href^="#"]')];
     const byId = {};
@@ -1281,13 +1305,13 @@
     }, { rootMargin:'-15% 0px -60% 0px', threshold:0 });
     sections.forEach(s=>observer.observe(s));
 
-    // La última sección (Sectores) puede ser más corta que la "banda" de
-    // detección del observer de arriba, así que su título nunca llega a
-    // cruzarla -- al llegar al final de la página, se fuerza el último
-    // link como activo (patrón estándar para el último ítem de un scroll-spy).
+    // La última sección puede ser más corta que la "banda" de detección del
+    // observer de arriba, así que su título nunca llega a cruzarla -- al
+    // llegar al final de la página, se fuerza el último link como activo
+    // (patrón estándar para el último ítem de un scroll-spy).
     let ticking = false;
     window.addEventListener('scroll', ()=>{
-      if(state.tab!=='resumen' || ticking) return;
+      if(state.tab!==tabName || ticking) return;
       ticking = true;
       requestAnimationFrame(()=>{
         ticking = false;
@@ -1295,7 +1319,10 @@
         if(atBottom) setActive(links[links.length-1]);
       });
     }, { passive:true });
-  })();
+  }
+  initNarrativeNav('saldosNav', 'saldos');
+  initNarrativeNav('tasasNav', 'tasas');
+  initNarrativeNav('resumenNav', 'resumen');
 
   function syncPills(){
     renderPills(document.getElementById('actSidebar'), pillClicked);
