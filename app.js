@@ -48,7 +48,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente' };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -1127,12 +1127,31 @@
     const rn = RN[idx];
     document.getElementById('diffDesc').innerHTML = 'Tasa en pesos de cada actividad, menos la tasa ponderada nacional ('+(rn&&rn.tasa_pesos_ponderada!=null?fmtPct.format(rn.tasa_pesos_ponderada)+'%':'—')+') en <b>'+PLABEL[per]+'</b>. En puntos porcentuales.';
 
-    const rows = DATA.actividades.map(act=>{
+    const rowsAll = DATA.actividades.map(act=>{
       const t = act.tasas[idx];
       if(!rn || rn.tasa_pesos_ponderada==null || !t || t.pesos==null) return null;
       return { nombre: act.nombre, diff: t.pesos - rn.tasa_pesos_ponderada };
     }).filter(Boolean);
-    rows.sort((a,b)=>b.diff-a.diff);
+    rowsAll.sort((a,b)=>b.diff-a.diff);
+
+    // Por defecto se muestran solo las actividades más alejadas del
+    // promedio (3 que más pagan + 3 que menos pagan); "Ver las N
+    // actividades" despliega la lista completa. Si hay 6 o menos no
+    // tiene sentido recortar, así que se muestra todo y se oculta el botón.
+    const n = rowsAll.length;
+    const showToggle = n > 6;
+    const rows = (state.diffExpanded || !showToggle) ? rowsAll : rowsAll.slice(0,3).concat(rowsAll.slice(-3));
+
+    const wrapEl = document.getElementById('diffChartWrap');
+    if(wrapEl) wrapEl.style.height = (state.diffExpanded ? Math.max(460, rows.length*21) : 190) + 'px';
+
+    const toggleBtn = document.getElementById('diffToggle');
+    if(toggleBtn){
+      toggleBtn.style.display = showToggle ? '' : 'none';
+      toggleBtn.classList.toggle('open', state.diffExpanded);
+      const labelEl = toggleBtn.querySelector('span');
+      if(labelEl) labelEl.textContent = state.diffExpanded ? 'Ver menos' : ('Ver las '+n+' actividades');
+    }
 
     const styles = getComputedStyle(document.documentElement);
     const badColor = styles.getPropertyValue('--bad-text').trim();
@@ -1156,9 +1175,17 @@
         plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=> (c.raw>=0?'+':'')+fmt1.format(c.raw)+' pp vs. el promedio' } } },
         scales:{
           x:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> (v>=0?'+':'')+v } },
-          y:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } }
+          y:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600}, autoSkip:false } }
         }
       }
+    });
+  }
+
+  const diffToggleBtn = document.getElementById('diffToggle');
+  if(diffToggleBtn){
+    diffToggleBtn.addEventListener('click', ()=>{
+      state.diffExpanded = !state.diffExpanded;
+      renderDiffChart();
     });
   }
 
@@ -1205,6 +1232,50 @@
     renderCostoChart();
     renderSectoresChart();
   }
+
+  // Nav pegajoso de Resumen: resalta la sección visible a medida que se
+  // baja, usando IntersectionObserver en vez de un listener de scroll.
+  // Al estar #view-resumen en display:none mientras no es la pestaña
+  // activa, no observa nada hasta que el usuario entra a esa pestaña y
+  // hace scroll -- no hace falta reiniciarlo al cambiar de pestaña.
+  (function initResumenNav(){
+    const nav = document.getElementById('resumenNav');
+    if(!nav) return;
+    const links = [...nav.querySelectorAll('a[href^="#"]')];
+    const byId = {};
+    const sections = links.map(a=>{
+      const id = a.getAttribute('href').slice(1);
+      byId[id] = a;
+      return document.getElementById(id);
+    }).filter(Boolean);
+    if(!sections.length) return;
+    function setActive(link){
+      links.forEach(a=>a.classList.remove('active'));
+      if(link) link.classList.add('active');
+    }
+    const observer = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting) return;
+        setActive(byId[entry.target.id]);
+      });
+    }, { rootMargin:'-15% 0px -60% 0px', threshold:0 });
+    sections.forEach(s=>observer.observe(s));
+
+    // La última sección (Sectores) puede ser más corta que la "banda" de
+    // detección del observer de arriba, así que su título nunca llega a
+    // cruzarla -- al llegar al final de la página, se fuerza el último
+    // link como activo (patrón estándar para el último ítem de un scroll-spy).
+    let ticking = false;
+    window.addEventListener('scroll', ()=>{
+      if(state.tab!=='resumen' || ticking) return;
+      ticking = true;
+      requestAnimationFrame(()=>{
+        ticking = false;
+        const atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 4);
+        if(atBottom) setActive(links[links.length-1]);
+      });
+    }, { passive:true });
+  })();
 
   function syncPills(){
     renderPills(document.getElementById('actSidebar'), pillClicked);

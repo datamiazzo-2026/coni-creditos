@@ -53,11 +53,11 @@
   }
 
   *{box-sizing:border-box;}
-  html{overflow-x:hidden;}
+  html{overflow-x:hidden; scroll-behavior:smooth;}
   body{
     background:var(--bg); color:var(--text);
     font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    padding-inline:0; margin:0; overflow-x:hidden; width:100%;
+    padding-inline:0; margin:0; width:100%;
   }
   .mono{font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric: tabular-nums;}
 
@@ -282,3 +282,34 @@
   footer.note{
     text-align:center; font-size:11.5px; color:var(--text-faint); padding:10px 20px 30px;
   }
+
+  /* ============================================================
+     Resumen: hilo narrativo con navegación pegajosa -- un menú
+     corto que se queda arriba mientras bajás, con una sección por
+     pregunta (Panorama / Tasas / Diferencial / Costo efectivo /
+     Sectores) en vez de panel tras panel sin guía.
+     ============================================================ */
+  .resumen-nav{
+    position:sticky; top:0; z-index:5; display:flex; gap:8px; flex-wrap:wrap;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+    padding:6px; margin-bottom:28px;
+  }
+  .resumen-nav a{
+    flex:1; min-width:104px; text-align:center; padding:9px 10px; border-radius:999px;
+    font-size:12px; font-weight:700; color:var(--text-muted); text-decoration:none;
+  }
+  .resumen-nav a:hover{background:var(--surface); color:var(--text);}
+  .resumen-nav a.active{background:var(--accent); color:#fff;}
+  .resumen-section{margin-bottom:38px; scroll-margin-top:64px;}
+  .resumen-section:last-child{margin-bottom:0;}
+  .resumen-eyebrow{font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--accent); margin-bottom:6px;}
+  .resumen-section h2{font-size:19px; font-weight:800; letter-spacing:-.3px; margin:0 0 6px;}
+  .resumen-lede{font-size:13.5px; color:var(--text-muted); line-height:1.6; max-width:640px; margin-bottom:16px;}
+
+  /* Botón "ver las N actividades" / "ver menos" (sección Diferencial) */
+  .showmore{
+    all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+    font-size:12.5px; font-weight:700; color:var(--accent);
+  }
+  .showmore svg{width:13px; height:13px; transition:transform .15s;}
+  .showmore.open svg{transform:rotate(180deg);}

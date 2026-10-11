@@ -163,62 +163,88 @@
 
   <div id="view-resumen" style="display:none;">
 
-    <div class="desc" style="margin-bottom:14px;">Panorama nacional: combina las <span id="nActividadesResumen">—</span> actividades, ponderando cada una por su peso relativo dentro del crédito total de cada trimestre.</div>
+    <nav class="resumen-nav" id="resumenNav">
+      <a href="#resumen-panorama" class="active">Panorama</a>
+      <a href="#resumen-tasas">Tasas</a>
+      <a href="#resumen-diferencial">Diferencial</a>
+      <a href="#resumen-costo">Costo efectivo</a>
+      <a href="#resumen-sectores">Sectores</a>
+    </nav>
 
-    <div class="tiles" id="resumenTiles"></div>
+    <section class="resumen-section" id="resumen-panorama">
+      <div class="resumen-eyebrow">Panorama</div>
+      <h2>El crédito al agro, en tres números</h2>
+      <div class="resumen-lede">Panorama nacional: combina las <span id="nActividadesResumen">—</span> actividades, ponderando cada una por su peso relativo dentro del crédito total de cada trimestre.</div>
+      <div class="tiles" id="resumenTiles"></div>
+    </section>
 
-    <div class="panel">
-      <h2>Tasa ponderada nacional por trimestre</h2>
-      <div class="desc">Promedio de la tasa de cada actividad, ponderado por su participación en el saldo total de esa moneda. Metodología replicada del informe de CONINAGRO (valida contra Jun-25: 49,3% publicado vs. <span id="checkPesosJun25">—</span> calculado acá).</div>
-      <div class="legend" id="resumenTasaLegend"></div>
-      <div class="chartwrap"><canvas id="resumenTasaChart"></canvas></div>
-    </div>
+    <section class="resumen-section" id="resumen-tasas">
+      <div class="resumen-eyebrow">Tasas</div>
+      <h2>¿A qué costo se financia el agro?</h2>
+      <div class="resumen-lede">Promedio de la tasa de cada actividad, ponderado por su participación en el saldo total de esa moneda. Metodología replicada del informe de CONINAGRO (valida contra Jun-25: 49,3% publicado vs. <span id="checkPesosJun25">—</span> calculado acá).</div>
+      <div id="rangeSlot-resumen"></div>
+      <div class="panel">
+        <div class="legend" id="resumenTasaLegend"></div>
+        <div class="chartwrap"><canvas id="resumenTasaChart"></canvas></div>
+      </div>
+    </section>
 
-    <div id="rangeSlot-resumen"></div>
+    <section class="resumen-section" id="resumen-diferencial">
+      <div class="resumen-eyebrow">Diferencial</div>
+      <h2>¿Qué actividades pagan más o menos que el promedio?</h2>
+      <div class="resumen-lede" id="diffDesc">Tasa en pesos de cada actividad, menos la tasa ponderada nacional del mismo trimestre. En puntos porcentuales.</div>
+      <div class="panel">
+        <div class="chartwrap" id="diffChartWrap" style="height:190px;"><canvas id="diffChart"></canvas></div>
+        <button class="showmore" id="diffToggle">
+          <span>Ver las 21 actividades</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+    </section>
 
-    <div class="panel">
-      <h2>Diferencial de cada actividad vs. el promedio ponderado</h2>
-      <div class="desc" id="diffDesc">Tasa en pesos de cada actividad, menos la tasa ponderada nacional del mismo trimestre. En puntos porcentuales.</div>
-      <div class="chartwrap" style="height:320px;"><canvas id="diffChart"></canvas></div>
-    </div>
+    <section class="resumen-section" id="resumen-costo">
+      <div class="resumen-eyebrow">Costo efectivo</div>
+      <h2>¿Convino más tomar crédito en pesos o en dólares?</h2>
+      <div class="resumen-lede">Compara la tasa ponderada en pesos contra el costo, llevado a pesos, de tomar crédito en dólares (tasa ponderada en dólares combinada con la devaluación de los últimos 12 meses). No hay dato en los primeros 4 trimestres de la serie, porque hace falta el tipo de cambio de un año atrás.</div>
+      <div class="panel">
+        <div class="legend" id="costoLegend"></div>
+        <div class="chartwrap"><canvas id="costoChart"></canvas></div>
+      </div>
+    </section>
 
-    <div class="panel">
-      <h2>Costo efectivo: crédito en dólares vs. en pesos</h2>
-      <div class="desc">Compara la tasa ponderada en pesos contra el costo, llevado a pesos, de tomar crédito en dólares (tasa ponderada en dólares combinada con la devaluación de los últimos 12 meses). No hay dato en los primeros 4 trimestres de la serie, porque hace falta el tipo de cambio de un año atrás.</div>
-      <div class="legend" id="costoLegend"></div>
-      <div class="chartwrap"><canvas id="costoChart"></canvas></div>
-    </div>
-
-    <div class="panel">
-      <div class="panelhead">
-        <h2>Composición del crédito total de la economía, por sector</h2>
-        <div class="segmented" id="sectoresCurSeg">
-          <button data-cur="corriente" class="active">Pesos corrientes</button>
-          <button data-cur="constante">Pesos constantes</button>
-          <button data-cur="dolares">Dólares (US$)</button>
-          <button data-cur="total">Total (US$ equiv.)</button>
+    <section class="resumen-section" id="resumen-sectores">
+      <div class="resumen-eyebrow">Sectores</div>
+      <h2>¿Qué lugar ocupa el agro en la economía?</h2>
+      <div class="resumen-lede" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- para el trimestre y la moneda elegidos abajo.</div>
+      <div class="panel">
+        <div class="panelhead">
+          <div class="legend" id="sectoresLegend"></div>
+          <div class="segmented" id="sectoresCurSeg">
+            <button data-cur="corriente" class="active">Pesos corrientes</button>
+            <button data-cur="constante">Pesos constantes</button>
+            <button data-cur="dolares">Dólares (US$)</button>
+            <button data-cur="total">Total (US$ equiv.)</button>
+          </div>
+        </div>
+        <div class="provgrid">
+          <div class="chartwrap" style="height:280px;"><canvas id="sectoresChart"></canvas></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th style="width:22px"></th><th>Sector</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+              <tbody id="sectoresBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="rangehead" style="margin-top:18px;">
+          <div class="desc" style="margin-bottom:0;">Trimestre</div>
+          <div class="rangevalue mono" id="sectoresPeriodoLabel">—</div>
+        </div>
+        <div class="rangeslider" id="sectoresPeriodoSliderWrap">
+          <div class="rangetrack"><div class="rangefill" id="sectoresPeriodoFill"></div></div>
+          <input type="range" id="sectoresPeriodoSlider" class="rangeinput" min="0" max="0" step="1" value="0">
         </div>
       </div>
-      <div class="desc" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- para el trimestre y la moneda elegidos abajo.</div>
-      <div class="legend" id="sectoresLegend"></div>
-      <div class="provgrid">
-        <div class="chartwrap" style="height:280px;"><canvas id="sectoresChart"></canvas></div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th style="width:22px"></th><th>Sector</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
-            <tbody id="sectoresBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="rangehead" style="margin-top:18px;">
-        <div class="desc" style="margin-bottom:0;">Trimestre</div>
-        <div class="rangevalue mono" id="sectoresPeriodoLabel">—</div>
-      </div>
-      <div class="rangeslider" id="sectoresPeriodoSliderWrap">
-        <div class="rangetrack"><div class="rangefill" id="sectoresPeriodoFill"></div></div>
-        <input type="range" id="sectoresPeriodoSlider" class="rangeinput" min="0" max="0" step="1" value="0">
-      </div>
-    </div>
+    </section>
 
   </div>
   </div>
