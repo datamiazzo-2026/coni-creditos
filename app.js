@@ -63,7 +63,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false, evolMode:'saldo' };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -212,6 +212,20 @@
     // #curSeg como los otros tres botones.
     document.getElementById('curSeg').querySelectorAll('button[data-cur]').forEach(c=>c.classList.toggle('active', c===btn));
     renderSaldosView();
+  });
+
+  // Toggle del gráfico de Evolución: "Saldo" (el de siempre, en la moneda
+  // elegida arriba en Panorama) vs "Saldo producto" (cantidad física
+  // equivalente, ver renderTiles). Es independiente de #curSeg porque
+  // saldo producto no tiene "moneda" -- siempre se expresa en su propia
+  // unidad (t, l, kg, cajas). Si la actividad no tiene saldo producto,
+  // ese botón queda deshabilitado (ver renderSaldosView).
+  document.getElementById('evolModeSeg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-evolmode]');
+    if(!btn || btn.disabled) return;
+    state.evolMode = btn.dataset.evolmode;
+    document.getElementById('evolModeSeg').querySelectorAll('button[data-evolmode]').forEach(c=>c.classList.toggle('active', c===btn));
+    renderChart(getAct(state.actId));
   });
 
   // Cuadro de referencia de "Pesos constantes": explica en lenguaje llano
@@ -558,12 +572,35 @@
     wrap.appendChild(tileSaldoProducto);
   }
 
+  // Evolución admite dos modos (ver toggle #evolModeSeg en el HTML):
+  // "saldo" (el de siempre, en la moneda elegida en Panorama) y
+  // "saldoproducto" (cantidad física equivalente, misma cuenta que la
+  // tarjeta de Saldo producto, pero a lo largo del tiempo). Comparten
+  // toda la lógica del gráfico de barras -- solo cambia de dónde sale
+  // `values`, el prefijo/sufijo de los números y el texto de abajo.
   function renderChart(act){
-    const meta = currencyMeta(state.cur);
+    const isProducto = state.evolMode==='saldoproducto' && act.saldo_producto_disponible;
+
+    let meta, values, unidadSufijo, descHtml;
+    if(isProducto){
+      let unidad = act.saldo_producto_unidad;
+      values = act.series.slice(state.rangeStart, state.rangeEnd+1)
+        .map(s => s && s.saldo_producto!=null ? s.saldo_producto : null);
+      if(unidad==='kg'){ values = values.map(v=> v===null?null:v/1000); unidad='t'; }
+      else if(unidad==='caja de 18kg'){ unidad='cajas de 18kg'; }
+      meta = { prefix:'', label:'producto' };
+      unidadSufijo = ' '+unidad;
+      descHtml = 'Saldo producto de <b>'+act.nombre+'</b>, por trimestre ('+act.saldo_producto_fuente+').';
+    } else {
+      meta = currencyMeta(state.cur);
+      values = act.series.slice(state.rangeStart, state.rangeEnd+1)
+        .map(s => s && s[meta.field]!==undefined ? s[meta.field] : null);
+      unidadSufijo = '';
+      descHtml = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b>, por trimestre.';
+    }
+
     const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
     const labels = periodosVisible.map(p=>PLABEL[p]);
-    const values = act.series.slice(state.rangeStart, state.rangeEnd+1)
-      .map(s => s && s[meta.field]!==undefined ? s[meta.field] : null);
     const lastIdx = values.reduce((acc,v,i)=> v!==null ? i : acc, -1);
     const maxAbs = values.reduce((m,v)=> v!==null ? Math.max(m, Math.abs(v)) : m, 0);
     const scale = pickScale(maxAbs);
@@ -575,6 +612,7 @@
     const gridColor = styles.getPropertyValue('--border').trim();
 
     const bg = values.map((v,i)=> i===lastIdx ? hi : muted);
+    const fmtTick = (v)=> (meta.prefix ? meta.prefix+' ' : '') + fmt1.format(v) + scale.suf + unidadSufijo;
 
     const ctx = document.getElementById('evolChart').getContext('2d');
     if(evolChart) evolChart.destroy();
@@ -589,16 +627,16 @@
       options:{
         responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{display:false},
-          tooltip:{ callbacks:{ label:(c)=> meta.prefix+' '+fmt1.format(c.raw)+scale.suf } }
+          tooltip:{ callbacks:{ label:(c)=> fmtTick(c.raw) } }
         },
         scales:{
           x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
-          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> meta.prefix+' '+fmt1.format(v)+scale.suf }, beginAtZero:true }
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> fmtTick(v) }, beginAtZero:true }
         }
       }
     });
 
-    document.getElementById('chartDesc').innerHTML = 'Saldo <b>'+meta.label+'</b> de <b>'+act.nombre+'</b>, por trimestre.';
+    document.getElementById('chartDesc').innerHTML = descHtml;
     document.getElementById('chartLegend').innerHTML =
       '<span><i style="background:'+muted+'"></i>trimestre anterior</span>'
       + '<span><i style="background:'+hi+'"></i>último dato</span>';
@@ -810,6 +848,19 @@
       state.cur = 'total';
       segBtns.forEach(b=>b.classList.toggle('active', b.dataset.cur==='total'));
     }
+
+    // Mismo criterio que arriba, para el toggle de Evolución: si la
+    // actividad no tiene saldo producto, el botón queda deshabilitado y,
+    // si estaba elegido, se vuelve a "saldo" (nunca se queda mostrando un
+    // gráfico vacío sin explicar por qué).
+    const evolBtns = document.getElementById('evolModeSeg').querySelectorAll('button');
+    evolBtns.forEach(b=>{
+      b.disabled = b.dataset.evolmode==='saldoproducto' && !act.saldo_producto_disponible;
+    });
+    if(!act.saldo_producto_disponible && state.evolMode==='saldoproducto'){
+      state.evolMode = 'saldo';
+    }
+    evolBtns.forEach(b=>b.classList.toggle('active', b.dataset.evolmode===state.evolMode));
 
     renderTiles(act);
     renderChart(act);

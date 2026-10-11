@@ -182,11 +182,20 @@
   .tile{padding:16px 18px; border-right:1px solid var(--border);}
   .tile:last-child{border-right:none;}
   /* #tiles (Saldos) tiene 5 tarjetas desde que se agregó "Saldo producto",
-     no 4 como #tasaTiles/#resumenTiles -- en el grid de 4 columnas de
-     escritorio eso deja la 4ta tarjeta como última de su fila pero no
-     última del DOM, así que :last-child ya no le quita el borde derecho.
-     Se apaga a mano solo para esta grilla puntual. */
-  #tiles .tile:nth-child(4){border-right:none;}
+     no 4 como #tasaTiles/#resumenTiles -- se le da su propia grilla de 5
+     columnas (en vez de las 4 de ".tiles") para que las 5 entren en una
+     sola fila en escritorio, sin fila extra con una sola tarjeta suelta.
+     Con 5 columnas exactas la última tarjeta ya es :last-child del DOM
+     normalmente, así que la regla de arriba le saca el borde sola -- no
+     hace falta ningún nth-child extra como con 4 columnas. SOLO en
+     escritorio (>820px): un selector por #id gana por especificidad a
+     ".tiles" aunque esté definido ANTES que el media query de mobile más
+     abajo, así que si esta regla no quedara encerrada en su propio media
+     query de escritorio, pisaría también el "repeat(2,1fr)" de mobile. */
+  @media (min-width:821px){
+    #tiles{grid-template-columns:repeat(5,1fr);}
+    #tiles .tile{padding:14px 14px;}
+  }
   .tile .label{font-size:10.5px; font-weight:700; letter-spacing:.5px; color:var(--text-faint); text-transform:uppercase;}
   .tile .value{font-size:23px; font-weight:800; margin-top:6px; letter-spacing:-.3px;}
   .tile .unit{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
