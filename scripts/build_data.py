@@ -1122,6 +1122,28 @@ def _tasas_province_breakdown(idx_tasas, act, per):
 # Construcción del JSON final
 # ---------------------------------------------------------------------------
 
+def load_saldo_producto_precios(path):
+    """Carga data/saldo_producto_precios.json (generado por
+    scripts/build_saldo_producto_precios.py a partir del tablero de
+    indicadores de precios de CONINAGRO) y devuelve
+    {actividad_id: {moneda, saldo_field, unidad, fuente_label,
+    precio_por_periodo: {periodo_int: precio_o_None}}}.
+
+    Devuelve (precios, motivos_no_disponible): `precios` trae las 14
+    actividades para las que SÍ se calcula saldo producto; `motivos` trae,
+    para las otras 7, el motivo puntual de por qué no (ver docstring de
+    build_saldo_producto_precios.py para el detalle de cada caso).
+    """
+    with open(path, encoding='utf-8') as f:
+        raw = json.load(f)
+    motivos = raw.pop('_no_disponibles', {})
+    out = {}
+    for act_id, cfg in raw.items():
+        precio_por_periodo = {int(p): v for p, v in cfg['precio_por_periodo'].items()}
+        out[act_id] = {**cfg, 'precio_por_periodo': precio_por_periodo}
+    return out, motivos
+
+
 def build(source_paths, out_path):
     saldos, tasas = [], []
     for path in source_paths:
@@ -1148,6 +1170,17 @@ def build(source_paths, out_path):
         pesos_constantes_factor = build_pesos_constantes_factor(periodos, ipc_indice_sintetico)
     else:
         print(f"  AVISO: no se encontró {ipc_path} -- no se calcula el saldo en pesos constantes ni la tasa real.")
+
+    # data/saldo_producto_precios.json: precios de productor para el cálculo
+    # de "saldo producto" (saldo de crédito ÷ precio = toneladas/litros/kg
+    # equivalentes). Es opcional -- si no está, el dashboard sigue
+    # funcionando igual, simplemente ninguna actividad tiene esa tarjeta.
+    sp_path = Path(out_path).parent / 'saldo_producto_precios.json'
+    if sp_path.exists():
+        saldo_producto_precios, saldo_producto_motivos = load_saldo_producto_precios(sp_path)
+    else:
+        saldo_producto_precios, saldo_producto_motivos = {}, {}
+        print(f"  AVISO: no se encontró {sp_path} -- no se calcula saldo producto para ninguna actividad.")
 
     # Si un mismo (Orden, período, moneda) aparece en más de una fuente, gana
     # la última fuente pasada en la línea de comando (los diccionarios de
@@ -1181,6 +1214,9 @@ def build(source_paths, out_path):
 
     out_acts = []
     for act in ordered_acts:
+        act_id = slugify(act)
+        sp_cfg = saldo_producto_precios.get(act_id)
+
         series = []
         for per in periodos:
             r0 = idx.get((act, per, 0))
@@ -1195,9 +1231,25 @@ def build(source_paths, out_path):
             total_usd = round(total_ars / tc) if (total_ars and tc) else None
             factor_constante = pesos_constantes_factor.get(per)
             total_ars_constante = round(total_ars * factor_constante) if (total_ars and factor_constante) else None
+
+            # Saldo producto = saldo del trimestre (en la moneda que indique
+            # sp_cfg['saldo_field'] -- 'total_ars' para casi todas, 'total_usd'
+            # para Cereales/oleaginosas/forrajeras, ver build_saldo_producto_precios.py)
+            # dividido por el precio de ese mismo trimestre. None si la
+            # actividad no tiene configuración de precio, o si falta el
+            # precio de ese trimestre puntual (ej.: los 4 trimestres de 2015,
+            # anteriores al inicio de la serie de precios en ene-2016).
+            saldo_producto = None
+            if sp_cfg is not None:
+                saldo_val = {'total_ars': total_ars, 'total_usd': total_usd}.get(sp_cfg['saldo_field'])
+                precio = sp_cfg['precio_por_periodo'].get(per)
+                if saldo_val is not None and precio:
+                    saldo_producto = saldo_val / precio
+
             series.append({'periodo': per, 'tc': tc, 'total_ars': total_ars, 'pesos_ars': pesos_ars,
                             'dolares_usd': dolares_usd, 'total_usd': total_usd,
-                            'total_ars_constante': total_ars_constante})
+                            'total_ars_constante': total_ars_constante,
+                            'saldo_producto': saldo_producto})
 
         n_completos = sum(1 for s in series if s)
         saldos_total_completo = n_completos == len(periodos)
@@ -1219,7 +1271,7 @@ def build(source_paths, out_path):
         tasas_provincias_series = [_tasas_province_breakdown(idx_tasas, act, per) for per in periodos]
 
         out_acts.append({
-            'id': slugify(act),
+            'id': act_id,
             'nombre': SHORT_NAMES.get(act, act),
             'nombre_completo': NOMBRE_COMPLETO_GRUPOS.get(act, act),
             'icono': ICONS.get(act, '🌱'),
@@ -1231,6 +1283,12 @@ def build(source_paths, out_path):
             'ultimo_periodo': last_per,
             'tasas': tasas_series,
             'tasas_provincias_series': tasas_provincias_series,
+            'saldo_producto_disponible': sp_cfg is not None,
+            'saldo_producto_unidad': sp_cfg['unidad'] if sp_cfg else None,
+            'saldo_producto_fuente': sp_cfg['fuente_label'] if sp_cfg else None,
+            'saldo_producto_moneda': sp_cfg['moneda'] if sp_cfg else None,
+            'saldo_producto_motivo': None if sp_cfg else saldo_producto_motivos.get(
+                act_id, 'no disponible para esta actividad'),
         })
 
     # `ipc` ya se cargó más arriba (se usa también para pesos_constantes_factor).
