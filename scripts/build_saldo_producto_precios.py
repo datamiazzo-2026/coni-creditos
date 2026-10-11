@@ -68,7 +68,11 @@ METODOLOGÍA (ver análisis de factibilidad hecho sobre v14, Oct-2026):
       que solo representa aves de corral, no otras especies menores que
       pueda incluir la categoría.
   Todas estas aclaraciones están en "fuente_label" de cada actividad en el
-  JSON de salida, y el dashboard las muestra tal cual.
+  JSON de salida, y el dashboard las muestra tal cual. Por pedido explícito
+  de Ciro (Oct-2026) "fuente_label" es deliberadamente CORTO -- solo el
+  producto y, si corresponde, el desajuste de concepto -- y NO nombra la
+  bolsa/cámara/organismo que publica cada precio (eso queda documentado acá
+  arriba y en los comentarios de ACT_CONFIG más abajo, no en la tarjeta).
 
 - "Cereales, oleaginosas y forrajeras" es la única actividad cuyo precio
   se calcula en DÓLARES (promedio de cebada/girasol/maíz/soja/sorgo/trigo,
@@ -108,75 +112,90 @@ COLS = {
 # actividad (id = slug, igual al que genera slugify() en build_data.py) ->
 # configuración de qué columnas usar y cómo combinarlas.
 ACT_CONFIG = {
+    # fuente: promedio de cebada/girasol/maíz/soja/sorgo/trigo, cotizan en
+    # u$s/t (MATba-Rofex/BCR/SAGyP/BCBB) -- ver nota de moneda=usd arriba.
     'cereales-oleaginosas-y-forraje': {
         'componentes': ['cebada', 'girasol', 'maiz', 'soja', 'sorgo', 'trigo'],
         'moneda': 'usd', 'saldo_field': 'total_usd', 'unidad': 't',
-        'fuente_label': 'Promedio simple de cebada, girasol, maíz, soja, sorgo y trigo (precios en dólares; MATba-Rofex/BCR/SAGyP/BCBB)',
+        'fuente_label': 'Promedio de cereales y oleaginosas',
     },
+    # fuente: SAGyP, precio promedio de algodón al mercado interno.
     'plantas-para-la-obtencion-de-f': {
         'componentes': ['algodon_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio promedio de algodón al mercado interno (SAGyP)',
+        'fuente_label': 'Precio de algodón',
     },
+    # fuente: Cámara del Tabaco / SAGyP, Virginia Acopio+FET, Salta.
     'tabaco': {
         'componentes': ['tabaco_acopio_fet'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio tabaco Virginia Acopio+FET, Salta (Cámara del Tabaco / SAGyP)',
+        'fuente_label': 'Precio de tabaco',
     },
+    # fuente: Mercado de Liniers, precio promedio bovinos.
     'bovino-excepto-en-cabanas-y-pa': {
         'componentes': ['bovinos_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio promedio bovinos (Mercado de Liniers)',
+        'fuente_label': 'Precio de hacienda bovina',
     },
+    # fuente: SIPAN/INTA, categoría 12C+3,5L.
     'ovino-excepto-en-cabanas-y-par': {
         'componentes': ['ovinos_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio promedio ovinos, categoría 12C+3,5L (SIPAN/INTA)',
+        'fuente_label': 'Precio de hacienda ovina',
     },
+    # fuente: SAGyP, Capón General (informes de precios porcinos).
     'porcino-excepto-en-cabanas': {
         'componentes': ['porcino_capon'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio promedio Capón General, informes de precios porcinos (SAGyP)',
+        'fuente_label': 'Precio de hacienda porcina',
     },
+    # fuente: SIGLeA/SAGyP, precio al productor.
     'produccion-de-leche-incluye-la': {
         'componentes': ['leche_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'l',
-        'fuente_label': 'Precio al productor de leche cruda (SIGLeA/SAGyP)',
+        'fuente_label': 'Precio de leche cruda',
     },
+    # fuente: Instituto Forestal Misiones / INTA Concordia, pino y eucalipto.
     'madera': {
         'componentes': ['forestacion_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 't',
-        'fuente_label': 'Precio promedio forestación, pino y eucalipto (Instituto Forestal Misiones / INTA Concordia)',
+        'fuente_label': 'Precio de madera',
     },
+    # fuente: Mercado Central, precio mayorista de hortalizas.
     'hortalizas-legumbres-flores-y-': {
         'componentes': ['hortalizas_mayorista'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio mayorista de hortalizas (Mercado Central) — no incluye flores, sin precio propio en la fuente',
+        'fuente_label': 'Precio de hortalizas, no incluye flores',
     },
+    # fuente: Mercado Central, promedio de manzana/pera/limón/mandarina/naranja/pomelo.
     'frutas-excepto-vid-para-vinifi': {
         'componentes': ['manzana', 'pera', 'limon', 'mandarina', 'naranja', 'pomelo'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'caja de 18kg',
-        'fuente_label': 'Promedio simple de manzana, pera, limón, mandarina, naranja y pomelo (Mercado Central) — no incluye nueces/frutos secos, sin precio propio en la fuente',
+        'fuente_label': 'Precio de frutas, no incluye nueces',
     },
+    # fuente: Cátedra Avícola, ponderado huevo-carne.
     'produccion-de-granja-y-cria-de': {
         'componentes': ['aves_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio promedio de aves, ponderado huevo-carne (Cátedra Avícola) — solo representa aves de corral',
+        'fuente_label': 'Precio de aves, no otras especies de granja',
     },
+    # fuente: INDEC, harina de trigo al consumidor.
     'elaboracion-de-productos-de-mo': {
         'componentes': ['harina_trigo'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'kg',
-        'fuente_label': 'Precio de harina de trigo al consumidor (INDEC) — no incluye alimento balanceado, sin precio propio en la fuente',
+        'fuente_label': 'Precio de harina, no alimento balanceado',
     },
+    # fuente: Bolsa de Comercio de Mendoza, vino y mosto (no hay precio de uva).
     'vid-para-vinificar': {
         'componentes': ['vino_y_mosto'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'l',
-        'fuente_label': 'Precio de vino y mosto (Bolsa de Comercio de Mendoza) — es precio de producto elaborado, no de uva: no hay precio de uva en la fuente',
+        'fuente_label': 'Precio de vino y mosto, no de uva',
     },
+    # fuente: SIGLeA/SAGyP, misma serie que "Producción de leche" (leche cruda).
     'elaboracion-de-productos-lacte': {
         'componentes': ['leche_promedio'],
         'moneda': 'ars', 'saldo_field': 'total_ars', 'unidad': 'l',
-        'fuente_label': 'Precio de leche cruda al productor (SIGLeA/SAGyP) — no es precio de producto lácteo elaborado, sin precio propio en la fuente',
+        'fuente_label': 'Precio de leche cruda, no elaborado',
     },
 }
 
@@ -225,19 +244,19 @@ def extract_monthly(xlsx_path):
 # la investigación detrás de cada motivo).
 MOTIVOS_NO_DISPONIBLE = {
     'plantas-sacariferas':
-        'no disponible: no hay ningún dato de precio, costo ni producción de azúcar/caña en la fuente',
+        'sin dato de precio de azúcar/caña',
     'otros-cultivos-industriales':
-        'no disponible: es una categoría genérica sin precio de productor propio en la fuente',
+        'categoría genérica, sin precio propio',
     'produccion-de-semillas-y-otras':
-        'no disponible: no hay un precio de semilla diferenciado del grano en la fuente',
+        'sin precio de semilla diferenciado del grano',
     'otros-pecuarios':
-        'no disponible: es una categoría genérica sin precio de productor propio en la fuente',
+        'categoría genérica, sin precio propio',
     'servicios-agricolas':
-        'no aplica: es una actividad de servicios, no de producto físico',
+        'es un servicio, no un producto físico',
     'servicios-pecuarios-excepto-lo':
-        'no aplica: es una actividad de servicios, no de producto físico',
+        'es un servicio, no un producto físico',
     'produccion-y-procesamiento-de-':
-        'no incluido: la fuente solo tiene precio de hacienda viva, no de producto procesado',
+        'solo hay precio de hacienda viva, no procesada',
 }
 
 
