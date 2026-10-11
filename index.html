@@ -190,8 +190,16 @@
     </div>
 
     <div class="panel">
-      <h2>Composición del crédito total de la economía, por sector</h2>
-      <div class="desc" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- en pesos corrientes, para el trimestre elegido abajo.</div>
+      <div class="panelhead">
+        <h2>Composición del crédito total de la economía, por sector</h2>
+        <div class="segmented" id="sectoresCurSeg">
+          <button data-cur="corriente" class="active">Pesos corrientes</button>
+          <button data-cur="constante">Pesos constantes</button>
+          <button data-cur="dolares">Dólares (US$)</button>
+          <button data-cur="total">Total (US$ equiv.)</button>
+        </div>
+      </div>
+      <div class="desc" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- para el trimestre y la moneda elegidos abajo.</div>
       <div class="legend" id="sectoresLegend"></div>
       <div class="provgrid">
         <div class="chartwrap" style="height:280px;"><canvas id="sectoresChart"></canvas></div>

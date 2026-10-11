@@ -48,7 +48,7 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1 };
+  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente' };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -253,6 +253,17 @@
     [...document.getElementById('tasaPesosModeSeg').children].forEach(c=>c.classList.toggle('active', c===btn));
     renderTasaPesosChart(getAct(state.actId));
   });
+
+  const sectoresCurSegEl = document.getElementById('sectoresCurSeg');
+  if(sectoresCurSegEl){
+    sectoresCurSegEl.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-cur]');
+      if(!btn) return;
+      state.curSectores = btn.dataset.cur;
+      [...sectoresCurSegEl.children].forEach(c=>c.classList.toggle('active', c===btn));
+      renderSectoresChart();
+    });
+  }
 
   let evolChart, tasaPesosChart, tasaDolaresChart, participChart, mixChart;
 
@@ -924,11 +935,27 @@
   function sectorColor(key){
     return getComputedStyle(document.documentElement).getPropertyValue(SECTOR_CSS_VAR[key]).trim();
   }
-  function groupSectores(raw){
+  // Mismas 4 vistas de moneda que ya existen por actividad en Saldos (ver
+  // currencyMeta más arriba), aplicadas acá a cada sector -- mismos nombres
+  // de campo, calculados en build_resumen_sectores() con la misma lógica
+  // (pesos_ars/dolares_usd/total_usd/total_ars_constante). La única
+  // diferencia es la vista por default: acá arranca en "Pesos corrientes"
+  // (total_ars, pesos+dólares del sector en pesos de hoy), no en
+  // "Pesos ($)" como en Saldos -- ver nota en build_resumen_sectores()
+  // sobre por qué total_ars (no pesos_ars) es la vista base de este panel.
+  function sectorCurrencyMeta(cur){
+    if(cur==='constante') return {prefix:'$', field:'total_ars_constante',
+      label:'a precios constantes de '+PLABEL[PERIODOS[PERIODOS.length-1]]};
+    if(cur==='dolares') return {prefix:'US$', field:'dolares_usd', label:'en dólares'};
+    if(cur==='total') return {prefix:'US$', field:'total_usd', label:'total, equivalente en US$'};
+    return {prefix:'$', field:'total_ars', label:'en pesos corrientes'};
+  }
+  function groupSectores(raw, field){
+    const g = (k)=> raw[k] ? raw[k][field] : null;
     return {
-      agro: raw.agro, construccion: raw.construccion, personas_fisicas: raw.personas_fisicas,
-      servicios: raw.servicios, industria_no_agro: raw.industria_no_agro, comercio: raw.comercio,
-      otros: raw.primaria_no_agro + raw.electricidad_gas_agua + raw.no_identificada,
+      agro: g('agro'), construccion: g('construccion'), personas_fisicas: g('personas_fisicas'),
+      servicios: g('servicios'), industria_no_agro: g('industria_no_agro'), comercio: g('comercio'),
+      otros: (g('primaria_no_agro')||0) + (g('electricidad_gas_agua')||0) + (g('no_identificada')||0),
     };
   }
 
@@ -966,7 +993,8 @@
       return;
     }
 
-    const grouped = groupSectores(entry.sectores);
+    const meta = sectorCurrencyMeta(state.curSectores);
+    const grouped = groupSectores(entry.sectores, meta.field);
     const total = SECTOR_ORDER.reduce((s,k)=> s + (grouped[k]||0), 0);
     const rowsSorted = SECTOR_ORDER.slice().sort((a,b)=> grouped[b] - grouped[a]);
 
@@ -989,7 +1017,7 @@
           legend: { display: false },
           tooltip: { callbacks: { label: (c)=>{
             const v = c.raw; const pct = total ? (v/total*100) : 0;
-            return c.label + ': ' + fmtMillones(v, '$') + ' (' + fmtPct.format(pct) + '%)';
+            return c.label + ': ' + fmtMillones(v, meta.prefix) + ' (' + fmtPct.format(pct) + '%)';
           } } },
         },
       },
@@ -1005,7 +1033,7 @@
         const v = grouped[k]; const pct = total ? (v/total*100) : 0;
         return '<tr><td><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:'+sectorColor(k)+'"></i></td>'
           + '<td>'+SECTOR_DISPLAY_LABELS[k]+'</td>'
-          + '<td class="num mono">'+fmtMillones(v, '$')+'</td>'
+          + '<td class="num mono">'+fmtMillones(v, meta.prefix)+'</td>'
           + '<td class="num mono">'+fmtPct.format(pct)+'%</td></tr>';
       }).join('');
     }
