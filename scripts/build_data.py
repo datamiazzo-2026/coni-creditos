@@ -867,54 +867,119 @@ def build_resumen_nacional(periodos, out_acts, ipc=None):
     return resumen
 
 
-def build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional):
+def build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional, pesos_constantes_factor):
     """Composición del crédito total de la economía por sector, para el
     gráfico de torta + corredor de tiempo de la pestaña Resumen (ver bloque
     SECTOR_ORDEN_LABELS/SECTOR_ORDENES más arriba para la metodología
     completa). Devuelve una lista paralela a `periodos` (None en los
-    períodos sin datos completos de alguna división), cada entrada con el
-    saldo de cada sector -- moneda 0 (Total: pesos + dólares en pesos,
-    misma convención que total_ars_nacional de build_resumen_nacional) -- y
-    el total de la economía en ese período (debe coincidir casi exacto con
-    la suma de los 9 sectores; verificado independientemente, ver
-    independent_verify_sectores.py).
+    períodos sin datos completos de alguna división).
 
-    "Agro" se toma directamente de total_ars_nacional (ya calculado por
-    build_resumen_nacional sumando total_ars de las 21 actividades) en vez
+    A pedido de CONINAGRO (Oct-2026), cada sector trae las MISMAS 4 vistas
+    de moneda que ya existen para cada actividad en la pestaña Saldos --
+    misma lógica, mismos nombres de campo, para que el frontend pueda
+    reusar directamente currencyMeta()/fmtMillones() de app.js:
+      total_ars            -- "Pesos corrientes": Total (pesos + dólares,
+                               ambos en pesos corrientes del trimestre;
+                               moneda 0). Es la vista que se mostraba antes
+                               de agregar el resto.
+      pesos_ars             -- moneda 1: solo el crédito otorgado EN PESOS.
+      dolares_usd            -- moneda 2: solo el crédito otorgado EN
+                               DÓLARES, en dólares reales (se divide por el
+                               tipo de cambio de la fila, no se deja en su
+                               equivalente en pesos).
+      total_usd              -- total_ars dividido por el tipo de cambio:
+                               el equivalente en dólares de TODO el crédito
+                               (el otorgado en pesos + el otorgado en
+                               dólares), no solo de la parte dolarizada.
+      total_ars_constante    -- total_ars ajustado por inflación a precios
+                               del último trimestre de la serie (mismo
+                               factor -- pesos_constantes_factor -- que usa
+                               build() para el saldo en pesos constantes de
+                               cada actividad).
+
+    Cada una de las 9 sub-categorías (agro + 8 que arman directo o por
+    resta de las divisiones del BCRA) se recalcula en las 3 monedas crudas
+    (0/1/2) con la misma metodología de partición ya validada para moneda 0
+    (ver independent_verify_sectores.py), y de ahí se derivan total_usd y
+    total_ars_constante. "Agro" sigue tomándose directo de
+    resumen_nacional (total_ars_nacional / pesos_ars_nacional /
+    dolares_usd_nacional, ya calculados sumando las 21 actividades) en vez
     de re-sumar los Orden agro acá -- mismo número exacto que el resto del
     dashboard, por construcción, sin dos implementaciones que puedan
     divergir."""
+    rn_by_per = {r['periodo']: r for r in resumen_nacional}
     out = []
-    for i, per in enumerate(periodos):
-        def _v(orden):
-            r = idx_raw_saldos.get((orden, per, 0))
+    for per in periodos:
+        def _v(orden, moneda):
+            r = idx_raw_saldos.get((orden, per, moneda))
             return r['total'] if (r and r['total'] is not None) else None
 
-        macro = {o: _v(o) for o in SECTOR_ORDENES}
-        if any(v is None for v in macro.values()):
+        macro0 = {o: _v(o, 0) for o in SECTOR_ORDENES}
+        if any(v is None for v in macro0.values()):
             out.append(None)
             continue
 
-        agro = resumen_nacional[i]['total_ars_nacional']
-        if not agro:
+        rn = rn_by_per.get(per)
+        agro_total_ars = rn['total_ars_nacional'] if rn else None
+        if not agro_total_ars:
             out.append(None)
             continue
 
-        agro_primaria = sum((_v(o) or 0) for o in AGRO_ORDENES_PRIMARIA)
-        agro_manufactura = sum((_v(o) or 0) for o in AGRO_ORDENES_MANUFACTURA)
+        macro1 = {o: _v(o, 1) for o in SECTOR_ORDENES}
+        # moneda 2 cruda = dólares en su equivalente en pesos (misma
+        # convención que SALDOS) -- se divide por tc recién al final, igual
+        # que dolares_usd de cada actividad en build().
+        macro2 = {o: _v(o, 2) for o in SECTOR_ORDENES}
 
-        sectores = {
-            'agro': agro,
-            'primaria_no_agro': macro[4] - agro_primaria,
-            'industria_no_agro': macro[45] - agro_manufactura,
-            'electricidad_gas_agua': macro[80],
-            'construccion': macro[87],
-            'comercio': macro[89],
-            'servicios': macro[94],
-            'personas_fisicas': macro[2],
-            'no_identificada': macro[1],
-        }
-        total_economia = sum(sectores.values())
+        agro_primaria0 = sum((_v(o, 0) or 0) for o in AGRO_ORDENES_PRIMARIA)
+        agro_manufactura0 = sum((_v(o, 0) or 0) for o in AGRO_ORDENES_MANUFACTURA)
+        agro_primaria1 = sum((_v(o, 1) or 0) for o in AGRO_ORDENES_PRIMARIA)
+        agro_manufactura1 = sum((_v(o, 1) or 0) for o in AGRO_ORDENES_MANUFACTURA)
+        agro_primaria2 = sum((_v(o, 2) or 0) for o in AGRO_ORDENES_PRIMARIA)
+        agro_manufactura2 = sum((_v(o, 2) or 0) for o in AGRO_ORDENES_MANUFACTURA)
+
+        def _raw(macro, agro_p, agro_m, agro_val):
+            return {
+                'agro': agro_val,
+                'primaria_no_agro': (macro[4] - agro_p) if macro.get(4) is not None else None,
+                'industria_no_agro': (macro[45] - agro_m) if macro.get(45) is not None else None,
+                'electricidad_gas_agua': macro.get(80),
+                'construccion': macro.get(87),
+                'comercio': macro.get(89),
+                'servicios': macro.get(94),
+                'personas_fisicas': macro.get(2),
+                'no_identificada': macro.get(1),
+            }
+
+        raw_total_ars = _raw(macro0, agro_primaria0, agro_manufactura0, agro_total_ars)
+        raw_pesos_ars = _raw(macro1, agro_primaria1, agro_manufactura1, rn.get('pesos_ars_nacional'))
+        # 'agro' de raw_dolares_ars_equiv no se usa -- el dólar de agro sale
+        # directo de dolares_usd_nacional (ya convertido), ver más abajo.
+        raw_dolares_ars_equiv = _raw(macro2, agro_primaria2, agro_manufactura2, None)
+
+        tc = rn.get('tc')
+        factor_constante = pesos_constantes_factor.get(per)
+
+        sectores = {}
+        for k, t_ars in raw_total_ars.items():
+            p_ars = raw_pesos_ars[k]
+            if k == 'agro':
+                d_usd = rn.get('dolares_usd_nacional')
+            else:
+                d_ars_equiv = raw_dolares_ars_equiv[k]
+                d_usd = round(d_ars_equiv / tc) if (d_ars_equiv is not None and tc) else None
+            sectores[k] = {
+                'total_ars': round(t_ars) if t_ars is not None else None,
+                'pesos_ars': round(p_ars) if p_ars is not None else None,
+                'dolares_usd': d_usd,
+                'total_usd': round(t_ars / tc) if (t_ars is not None and tc) else None,
+                'total_ars_constante': round(t_ars * factor_constante) if (t_ars is not None and factor_constante) else None,
+            }
+
+        # total_economia -- suma de total_ars (moneda 0) de los 9 sectores.
+        # Debe coincidir casi exacto con el Total que declara el propio BCRA
+        # (verificado independientemente, ver independent_verify_sectores.py).
+        total_economia = sum(v['total_ars'] for v in sectores.values())
         out.append({'periodo': per, 'sectores': sectores, 'total_economia': round(total_economia)})
     return out
 
@@ -1170,7 +1235,7 @@ def build(source_paths, out_path):
 
     # `ipc` ya se cargó más arriba (se usa también para pesos_constantes_factor).
     resumen_nacional = build_resumen_nacional(periodos, out_acts, ipc=ipc)
-    resumen_sectores = build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional)
+    resumen_sectores = build_resumen_sectores(periodos, idx_raw_saldos, resumen_nacional, pesos_constantes_factor)
 
     data = {'periodos': periodos, 'periodos_label': periodos_label,
             'provincias': PROVINCIAS, 'actividades': out_acts,
