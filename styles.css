@@ -125,7 +125,7 @@
     display:flex; align-items:center; justify-content:space-between; gap:14px;
     flex-wrap:wrap; margin-bottom:18px;
   }
-  .segmented{display:inline-flex; gap:6px; background:var(--surface-2); padding:4px; border-radius:999px; border:1px solid var(--border);}
+  .segmented{display:inline-flex; flex-wrap:wrap; max-width:100%; gap:6px; background:var(--surface-2); padding:4px; border-radius:999px; border:1px solid var(--border);}
   .segmented button{
     all:unset; cursor:pointer; padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:700;
     color:var(--text-muted);
@@ -189,6 +189,7 @@
   }
   .panel h2{font-size:15px; font-weight:700; margin:0 0 2px;}
   .panelhead{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  .panelhead > *{min-width:0;}
   .panel .desc{font-size:12.5px; color:var(--text-muted); margin-bottom:14px;}
   .panel .desc b{color:var(--text);}
 
