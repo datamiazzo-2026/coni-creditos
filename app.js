@@ -32,6 +32,21 @@
     if(scale.div===1) return prefix + ' ' + fmtInt.format(v);
     return prefix + ' ' + fmt1.format(v/scale.div) + scale.suf;
   }
+  // Saldo producto: mismo esquema de escala que fmtMillones, pero la unidad
+  // va DESPUÉS del número (kg, t, l, cajas) en vez de un prefijo de moneda
+  // antes. "kg" se muestra convertido a toneladas (dividiendo por 1000)
+  // porque los valores en kg quedan en cientos de millones y son ilegibles
+  // tal cual -- el resto de las unidades (t, l, caja de 18kg) ya vienen en
+  // una escala razonable del archivo de precios y no se convierten.
+  function fmtUnidadProducto(v, unidadBase){
+    if(v===null||v===undefined) return '—';
+    let val = v, unidad = unidadBase;
+    if(unidadBase==='kg'){ val = v/1000; unidad = 't'; }
+    else if(unidadBase==='caja de 18kg'){ unidad = 'cajas de 18kg'; }
+    const scale = pickScale(Math.abs(val));
+    const num = scale.div===1 ? fmtInt.format(val) : fmt1.format(val/scale.div)+scale.suf;
+    return num + ' ' + unidad;
+  }
   // "Pesos constantes": saldo total en pesos, ajustado por inflación a
   // precios del ÚLTIMO trimestre de la serie (hoy Jun-26 -- se recalcula
   // solo, usa PERIODOS[PERIODOS.length-1] en vez de tener la fecha
@@ -510,6 +525,37 @@
         + '<div class="value mono">—</div><div class="unit">sin dato de saldo total en '+PLABEL[perP]+'</div>';
     }
     wrap.appendChild(tileParticip);
+
+    // Saldo producto: saldo de crédito del trimestre ÷ precio de productor
+    // del mismo trimestre = cantidad física equivalente (toneladas, litros,
+    // kg o cajas, según la actividad -- ver build_saldo_producto_precios.py
+    // para la fuente y el porqué de cada elección de precio). Usa el mismo
+    // trimestre que la tarjeta de Participación (el extremo derecho del
+    // slider, no "el último con dato"), para que ambas tarjetas "del
+    // período actual" hablen siempre del mismo trimestre. Solo existe para
+    // 14 de las 21 actividades (act.saldo_producto_disponible); para las
+    // otras 7 (servicios, catch-alls sin precio propio, azúcar sin ningún
+    // dato, y procesamiento de carnes excluido a pedido de Ciro) se explica
+    // el motivo en la propia tarjeta en vez de solo mostrar "—".
+    const tileSaldoProducto = document.createElement('div');
+    tileSaldoProducto.className='tile';
+    if(!act.saldo_producto_disponible){
+      tileSaldoProducto.innerHTML = '<div class="label">Saldo producto</div>'
+        + '<div class="value mono">—</div>'
+        + '<div class="unit">'+(act.saldo_producto_motivo||'no disponible para esta actividad')+'</div>';
+    } else {
+      const spVal = sActP ? sActP.saldo_producto : null;
+      if(spVal!=null){
+        tileSaldoProducto.innerHTML = '<div class="label">Saldo producto · '+PLABEL[perP]+'</div>'
+          + '<div class="value mono">'+fmtUnidadProducto(spVal, act.saldo_producto_unidad)+'</div>'
+          + '<div class="unit">'+act.saldo_producto_fuente+'</div>';
+      } else {
+        tileSaldoProducto.innerHTML = '<div class="label">Saldo producto · '+PLABEL[perP]+'</div>'
+          + '<div class="value mono">—</div>'
+          + '<div class="unit">sin precio disponible en '+PLABEL[perP]+' (la serie de precios arranca en 2016)</div>';
+      }
+    }
+    wrap.appendChild(tileSaldoProducto);
   }
 
   function renderChart(act){
