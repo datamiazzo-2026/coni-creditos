@@ -3,7 +3,7 @@
   "moneda": "usd",
   "saldo_field": "total_usd",
   "unidad": "t",
-  "fuente_label": "Promedio simple de cebada, girasol, maíz, soja, sorgo y trigo (precios en dólares; MATba-Rofex/BCR/SAGyP/BCBB)",
+  "fuente_label": "Promedio de cereales y oleaginosas",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -57,7 +57,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio promedio de algodón al mercado interno (SAGyP)",
+  "fuente_label": "Precio de algodón",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -111,7 +111,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio tabaco Virginia Acopio+FET, Salta (Cámara del Tabaco / SAGyP)",
+  "fuente_label": "Precio de tabaco",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -165,7 +165,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio promedio bovinos (Mercado de Liniers)",
+  "fuente_label": "Precio de hacienda bovina",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -219,7 +219,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio promedio ovinos, categoría 12C+3,5L (SIPAN/INTA)",
+  "fuente_label": "Precio de hacienda ovina",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -273,7 +273,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio promedio Capón General, informes de precios porcinos (SAGyP)",
+  "fuente_label": "Precio de hacienda porcina",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -327,7 +327,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "l",
-  "fuente_label": "Precio al productor de leche cruda (SIGLeA/SAGyP)",
+  "fuente_label": "Precio de leche cruda",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -381,7 +381,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "t",
-  "fuente_label": "Precio promedio forestación, pino y eucalipto (Instituto Forestal Misiones / INTA Concordia)",
+  "fuente_label": "Precio de madera",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -435,7 +435,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio mayorista de hortalizas (Mercado Central) — no incluye flores, sin precio propio en la fuente",
+  "fuente_label": "Precio de hortalizas, no incluye flores",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -489,7 +489,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "caja de 18kg",
-  "fuente_label": "Promedio simple de manzana, pera, limón, mandarina, naranja y pomelo (Mercado Central) — no incluye nueces/frutos secos, sin precio propio en la fuente",
+  "fuente_label": "Precio de frutas, no incluye nueces",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -543,7 +543,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio promedio de aves, ponderado huevo-carne (Cátedra Avícola) — solo representa aves de corral",
+  "fuente_label": "Precio de aves, no otras especies de granja",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -597,7 +597,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "kg",
-  "fuente_label": "Precio de harina de trigo al consumidor (INDEC) — no incluye alimento balanceado, sin precio propio en la fuente",
+  "fuente_label": "Precio de harina, no alimento balanceado",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -651,7 +651,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "l",
-  "fuente_label": "Precio de vino y mosto (Bolsa de Comercio de Mendoza) — es precio de producto elaborado, no de uva: no hay precio de uva en la fuente",
+  "fuente_label": "Precio de vino y mosto, no de uva",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -705,7 +705,7 @@
   "moneda": "ars",
   "saldo_field": "total_ars",
   "unidad": "l",
-  "fuente_label": "Precio de leche cruda al productor (SIGLeA/SAGyP) — no es precio de producto lácteo elaborado, sin precio propio en la fuente",
+  "fuente_label": "Precio de leche cruda, no elaborado",
   "precio_por_periodo": {
    "20150331": null,
    "20150630": null,
@@ -756,12 +756,12 @@
   }
  },
  "_no_disponibles": {
-  "plantas-sacariferas": "no disponible: no hay ningún dato de precio, costo ni producción de azúcar/caña en la fuente",
-  "otros-cultivos-industriales": "no disponible: es una categoría genérica sin precio de productor propio en la fuente",
-  "produccion-de-semillas-y-otras": "no disponible: no hay un precio de semilla diferenciado del grano en la fuente",
-  "otros-pecuarios": "no disponible: es una categoría genérica sin precio de productor propio en la fuente",
-  "servicios-agricolas": "no aplica: es una actividad de servicios, no de producto físico",
-  "servicios-pecuarios-excepto-lo": "no aplica: es una actividad de servicios, no de producto físico",
-  "produccion-y-procesamiento-de-": "no incluido: la fuente solo tiene precio de hacienda viva, no de producto procesado"
+  "plantas-sacariferas": "sin dato de precio de azúcar/caña",
+  "otros-cultivos-industriales": "categoría genérica, sin precio propio",
+  "produccion-de-semillas-y-otras": "sin precio de semilla diferenciado del grano",
+  "otros-pecuarios": "categoría genérica, sin precio propio",
+  "servicios-agricolas": "es un servicio, no un producto físico",
+  "servicios-pecuarios-excepto-lo": "es un servicio, no un producto físico",
+  "produccion-y-procesamiento-de-": "solo hay precio de hacienda viva, no procesada"
  }
 }
