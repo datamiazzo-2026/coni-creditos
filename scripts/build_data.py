@@ -1127,7 +1127,14 @@ def load_saldo_producto_precios(path):
     scripts/build_saldo_producto_precios.py a partir del tablero de
     indicadores de precios de CONINAGRO) y devuelve
     {actividad_id: {moneda, saldo_field, unidad, fuente_label,
-    precio_por_periodo: {periodo_int: precio_o_None}}}.
+    precio_por_periodo: {periodo_int: precio_o_None},
+    variacion_interanual_por_periodo: {periodo_int: variacion_pct_o_None}}}.
+
+    `variacion_interanual_por_periodo` (sumado Oct-2026 para "tasa
+    producto") es la variación del precio contra el mismo trimestre un año
+    antes -- ver build_saldo_producto_precios.py para por qué interanual
+    en vez de ventana centrada (como la inflación general) y por qué no
+    hace falta ninguna extracción nueva del Excel para calcularla.
 
     Devuelve (precios, motivos_no_disponible): `precios` trae las 14
     actividades para las que SÍ se calcula saldo producto; `motivos` trae,
@@ -1140,7 +1147,11 @@ def load_saldo_producto_precios(path):
     out = {}
     for act_id, cfg in raw.items():
         precio_por_periodo = {int(p): v for p, v in cfg['precio_por_periodo'].items()}
-        out[act_id] = {**cfg, 'precio_por_periodo': precio_por_periodo}
+        variacion_interanual_por_periodo = {
+            int(p): v for p, v in cfg.get('variacion_interanual_por_periodo', {}).items()
+        }
+        out[act_id] = {**cfg, 'precio_por_periodo': precio_por_periodo,
+                       'variacion_interanual_por_periodo': variacion_interanual_por_periodo}
     return out, motivos
 
 
@@ -1260,11 +1271,24 @@ def build(source_paths, out_path):
         last_per = next((p for p in reversed(periodos) if idx.get((act, p, 0))), None)
         provincias_series = [_province_breakdown(idx, act, per, pesos_constantes_factor.get(per)) for per in periodos]
 
+        # "Tasa producto" (Oct-2026): variación interanual del precio del
+        # producto de esta actividad, para el mismo trimestre que `pesos`/
+        # `dolares` -- el frontend la compara contra la tasa nominal que
+        # corresponda según sp_cfg['moneda'] (pesos para 13 actividades,
+        # dólares solo para Cereales/oleaginosas/forrajeras) para ver cuál
+        # de las dos creció más. Es una serie nueva e independiente de la
+        # tasa real (que sigue deflactando por IPC, sin tocar) -- no
+        # reemplaza nada de lo que ya existía. None si la actividad no
+        # tiene saldo producto, o si ese trimestre puntual no tiene
+        # variación interanual (ver build_saldo_producto_precios.py: los 4
+        # trimestres de 2016 quedan sin ella en todas las actividades).
         tasas_series = []
         for per in periodos:
             t1, t2 = idx_tasas.get((act, per, 1)), idx_tasas.get((act, per, 2))
+            variacion_producto = sp_cfg['variacion_interanual_por_periodo'].get(per) if sp_cfg is not None else None
             tasas_series.append({'periodo': per, 'pesos': t1['total'] if t1 else None,
-                                  'dolares': t2['total'] if t2 else None})
+                                  'dolares': t2['total'] if t2 else None,
+                                  'variacion_producto': variacion_producto})
         tasas_completo = all(
             idx_tasas.get((act, p, 1)) and idx_tasas.get((act, p, 2)) for p in periodos
         )

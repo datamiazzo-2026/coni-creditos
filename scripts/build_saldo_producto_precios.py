@@ -74,6 +74,19 @@ METODOLOGÍA (ver análisis de factibilidad hecho sobre v14, Oct-2026):
   bolsa/cámara/organismo que publica cada precio (eso queda documentado acá
   arriba y en los comentarios de ACT_CONFIG más abajo, no en la tarjeta).
 
+- "Tasa producto" (Oct-2026): además de "precio_por_periodo", cada actividad
+  trae "variacion_interanual_por_periodo" -- la variación del precio de ese
+  producto contra el mismo trimestre un año antes. Es el insumo que usa
+  build_data.py para armar la serie "tasa producto" (comparar la tasa de
+  financiamiento nominal contra esta variación, para ver cuál de las dos
+  creció más), una serie NUEVA e independiente de "tasa real" (que sigue
+  deflactando por inflación general/IPC, sin cambios). Al ser interanual,
+  no hace falta ninguna extracción adicional del Excel: alcanza con el
+  mismo precio_por_periodo ya calculado arriba, comparando cada trimestre
+  contra el mismo trimestre del año anterior (periodo - 10000). Por el
+  mismo motivo, los 4 trimestres de 2016 quedan sin variación interanual en
+  todas las actividades (no hay precio de 2015 contra el que comparar).
+
 - "Cereales, oleaginosas y forrajeras" es la única actividad cuyo precio
   se calcula en DÓLARES (promedio de cebada/girasol/maíz/soja/sorgo/trigo,
   que cotizan en u$s/t en el archivo) -- por eso usa moneda="usd" y
@@ -280,12 +293,36 @@ def build(xlsx_path, out_path):
             else:
                 precio = None
             serie[str(p)] = precio
+
+        # "Tasa producto" (Oct-2026): variación INTERANUAL del precio del
+        # producto (mismo trimestre, un año antes), para comparar contra la
+        # tasa de financiamiento nominal y ver cuál de las dos creció más.
+        # Ciro eligió interanual en vez de ventana centrada de 12 meses (la
+        # que usa la inflación general/IPC para la tasa real) justamente
+        # para no perder cobertura en los trimestres más recientes -- acá no
+        # hay un equivalente a la proyección REM del IPC, así que una
+        # ventana centrada dejaría sin dato a los últimos 1-2 trimestres de
+        # la serie. El costo de esta elección: como el precio del producto
+        # arranca en ene-2016, los 4 trimestres de 2016 quedan sin variación
+        # interanual en TODAS las actividades (no hay precio de 2015 contra
+        # el que comparar), no solo los de 2015 (que ya quedaban sin saldo
+        # producto por el motivo explicado arriba).
+        variacion_interanual = {}
+        for p in PERIODOS:
+            precio_actual = serie.get(str(p))
+            precio_anterior = serie.get(str(p - 10000))
+            if precio_actual is not None and precio_anterior:
+                variacion_interanual[str(p)] = round((precio_actual / precio_anterior - 1) * 100, 4)
+            else:
+                variacion_interanual[str(p)] = None
+
         out[act_id] = {
             'moneda': cfg['moneda'],
             'saldo_field': cfg['saldo_field'],
             'unidad': cfg['unidad'],
             'fuente_label': cfg['fuente_label'],
             'precio_por_periodo': serie,
+            'variacion_interanual_por_periodo': variacion_interanual,
         }
 
     out['_no_disponibles'] = MOTIVOS_NO_DISPONIBLE
@@ -298,7 +335,8 @@ def build(xlsx_path, out_path):
         if act_id == '_no_disponibles':
             continue
         n = sum(1 for v in d['precio_por_periodo'].values() if v is not None)
-        print(f"  {act_id}: {n}/{len(PERIODOS)} períodos con precio")
+        n_var = sum(1 for v in d['variacion_interanual_por_periodo'].values() if v is not None)
+        print(f"  {act_id}: {n}/{len(PERIODOS)} períodos con precio, {n_var}/{len(PERIODOS)} con variación interanual")
     print(f"  (+ {len(MOTIVOS_NO_DISPONIBLE)} actividades sin saldo producto, con motivo)")
 
 
