@@ -1174,13 +1174,25 @@
 
     // Aviso de "Tasa producto": distingue el motivo (igual criterio que la
     // tarjeta) de simplemente faltar la variación interanual en algunos
-    // trimestres puntuales (en vez de a toda la actividad).
+    // trimestres puntuales (en vez de a toda la actividad). Si la actividad
+    // no tiene saldo producto, el gráfico de "Tasa producto" NO se
+    // renderiza (antes se renderizaba igual, mostrando solo la barra de
+    // tasa nominal con una leyenda rota -- "Variación interanual del
+    // precio (null)", porque act.saldo_producto_fuente es null para estas
+    // 7 actividades -- bug encontrado en revisión adversarial, Oct-2026).
+    // En vez de un gráfico a medias, se oculta el panel entero y el aviso
+    // de arriba explica el motivo (igual criterio que la tarjeta de
+    // Panorama, que ya mostraba el motivo en vez de un "—" ciego).
     const noteElTP = document.getElementById('partialNoteTasaProducto');
     const noteTextTP = document.getElementById('partialNoteTasaProductoText');
+    const panelTP = document.querySelector('#tasas-producto .panel');
     if(!act.saldo_producto_disponible){
       noteTextTP.innerHTML = 'Esta actividad no tiene tasa producto: '+(act.saldo_producto_motivo||'no disponible para esta actividad')+'.';
       noteElTP.style.display = 'flex';
+      if(panelTP) panelTP.style.display = 'none';
+      if(tasaProductoChart){ tasaProductoChart.destroy(); tasaProductoChart = null; }
     } else {
+      if(panelTP) panelTP.style.display = '';
       const sinVariacion = act.tasas.filter(t=>t.variacion_producto===null).length;
       if(sinVariacion>0){
         noteTextTP.innerHTML = 'A esta actividad le falta la variación interanual del precio en '+sinVariacion+' de '+act.tasas.length+' trimestres (la serie de precios arranca en 2016, así que ese primer año queda sin dato interanual); esos períodos se omiten del gráfico.';
@@ -1188,12 +1200,12 @@
       } else {
         noteElTP.style.display = 'none';
       }
+      renderTasaProductoChart(act);
     }
 
     renderTasaTiles(act);
     renderTasaPesosChart(act);
     renderTasaDolaresChart(act);
-    renderTasaProductoChart(act);
     renderTasaProvinceMap(act);
   }
 
