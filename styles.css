@@ -150,6 +150,17 @@
      función; el valor de acá (50%) es solo el default antes de la primera
      medición. */
   .seg-item{position:relative; display:inline-flex;}
+  /* Ícono "ⓘ" standalone (no dentro de un .segmented) que abre el mismo
+     tipo de cuadro de referencia que "Pesos constantes" -- usado en el
+     título de la sección "Tasa producto" (no hay un botón de toggle propio
+     ahí para colgarle el tooltip, así que este ícono hace ese rol). */
+  .info-icon-btn{
+    all:unset; display:inline-flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; cursor:help; vertical-align:middle;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    color:var(--text-faint); font-size:11px; font-weight:700; line-height:1;
+  }
+  .info-icon-btn:hover, .info-icon-btn:focus-visible{color:var(--accent); border-color:var(--accent);}
   .seg-tooltip{
     position:absolute; top:calc(100% + 9px); left:var(--tooltip-left, 50%); transform:var(--tooltip-transform, translateX(-50%));
     width:250px; max-width:calc(100vw - 32px);
@@ -192,9 +203,11 @@
      ".tiles" aunque esté definido ANTES que el media query de mobile más
      abajo, así que si esta regla no quedara encerrada en su propio media
      query de escritorio, pisaría también el "repeat(2,1fr)" de mobile. */
+  /* #tasaTiles (Tasas) pasó a tener 5 tarjetas también, desde que se agregó
+     "Tasa producto" -- mismo criterio y mismo motivo que #tiles arriba. */
   @media (min-width:821px){
-    #tiles{grid-template-columns:repeat(5,1fr);}
-    #tiles .tile{padding:14px 14px;}
+    #tiles, #tasaTiles{grid-template-columns:repeat(5,1fr);}
+    #tiles .tile, #tasaTiles .tile{padding:14px 14px;}
   }
   .tile .label{font-size:10.5px; font-weight:700; letter-spacing:.5px; color:var(--text-faint); text-transform:uppercase;}
   .tile .value{font-size:23px; font-weight:800; margin-top:6px; letter-spacing:-.3px;}

@@ -290,6 +290,55 @@
     }, {passive:true});
   })();
 
+  // Versión reutilizable de initConstanteTooltip() de arriba, para los
+  // cuadros de referencia de "Saldo producto" y "Tasa producto" (pedido de
+  // Ciro, Oct-2026: "lo mismo que tenemos en pesos constantes" para estas
+  // dos secciones nuevas). Misma mecánica exacta (mismo CSS .seg-item/
+  // .seg-tooltip, mismo manejo de hover/foco/touch) -- se factoriza en vez
+  // de duplicarla una tercera vez. `wrapSelector` tiene que resolver a un
+  // elemento con class="seg-item" que contenga el trigger (botón o ícono)
+  // y, como hijo, el <div class="seg-tooltip">.
+  function initInfoTooltip(wrapSelector, html){
+    const wrap = document.querySelector(wrapSelector);
+    const tip = wrap && wrap.querySelector('.seg-tooltip');
+    if(!wrap || !tip) return;
+    tip.innerHTML = html;
+
+    function positionTooltip(){
+      const wrapRect = wrap.getBoundingClientRect();
+      const tipWidth = tip.getBoundingClientRect().width;
+      const pad = 16;
+      const idealCenter = wrapRect.left + wrapRect.width/2;
+      const idealLeft = idealCenter - tipWidth/2;
+      const maxLeft = window.innerWidth - tipWidth - pad;
+      const clampedLeft = Math.max(pad, Math.min(idealLeft, Math.max(pad, maxLeft)));
+      tip.style.setProperty('--tooltip-left', (clampedLeft - wrapRect.left) + 'px');
+      tip.style.setProperty('--tooltip-transform', 'none');
+      const arrowMin = 14, arrowMax = tipWidth - 14;
+      const arrowLeft = Math.max(arrowMin, Math.min(idealCenter - clampedLeft, arrowMax));
+      tip.style.setProperty('--arrow-left', arrowLeft + 'px');
+    }
+
+    let hideTimer = null;
+    let touchLock = false;
+    function show(){ clearTimeout(hideTimer); positionTooltip(); tip.classList.add('visible'); }
+    function hide(delay){ clearTimeout(hideTimer); hideTimer = setTimeout(()=> tip.classList.remove('visible'), delay || 0); }
+    wrap.addEventListener('mouseenter', ()=>{ if(!touchLock) show(); });
+    wrap.addEventListener('mouseleave', ()=>{ if(!touchLock) hide(0); });
+    wrap.addEventListener('focusin', ()=>{ if(!touchLock) show(); });
+    wrap.addEventListener('focusout', ()=>{ if(!touchLock) hide(0); });
+    wrap.addEventListener('touchstart', ()=>{
+      touchLock = true;
+      show();
+      hide(3500);
+      setTimeout(()=>{ touchLock = false; }, 700);
+    }, {passive:true});
+  }
+  initInfoTooltip('#evolModeSeg .seg-item',
+    '<b>¿Qué es "Saldo producto"?</b>Convierte el saldo de crédito en la cantidad física equivalente del producto de esta actividad (toneladas, litros, kg o cajas, según corresponda), dividiendo el saldo por el precio de ese producto en el mismo trimestre.');
+  initInfoTooltip('#tasas-producto .seg-item',
+    '<b>¿Qué es "Tasa producto"?</b>Compara, para esta actividad, cuánto subió la tasa de financiamiento contra cuánto subió el precio de su propio producto en los últimos 12 meses -- para ver cuál de las dos creció más, y por cuántos puntos.');
+
   document.getElementById('tasaProvCurSeg').addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-cur]');
     if(!btn) return;
@@ -317,7 +366,7 @@
     });
   }
 
-  let evolChart, tasaPesosChart, tasaDolaresChart, participChart, mixChart;
+  let evolChart, tasaPesosChart, tasaDolaresChart, tasaProductoChart, participChart, mixChart;
 
   // Misma idea que currencyMeta(), pero para la participación en el crédito
   // agro total: a diferencia del resto de la vista Saldos (que en "Total"
@@ -955,6 +1004,54 @@
     });
   }
 
+  // Gráfico de "Tasa producto": dos series lado a lado por trimestre --
+  // la tasa de financiamiento nominal (en la moneda que corresponde según
+  // el precio de esta actividad) y la variación interanual del precio de
+  // su propio producto -- para que se vea de un vistazo cuál de las dos
+  // viene creciendo más. A diferencia de "Tasa real" (que deflacta un solo
+  // número por IPC), acá se muestran las DOS series separadas a propósito:
+  // Ciro pidió explícitamente "ver cuál creció más y en cuánto", no un
+  // único valor ya neteado -- la tarjeta de Panorama (renderTasaTiles) es
+  // la que sí resume la diferencia en un solo número de puntos porcentuales.
+  function renderTasaProductoChart(act){
+    const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
+    const labels = periodosVisible.map(p=>PLABEL[p]);
+    const tasasVisible = act.tasas.slice(state.rangeStart, state.rangeEnd+1);
+    const monedaLbl = act.saldo_producto_moneda==='usd' ? 'dólares' : 'pesos';
+    const nominalLabel = 'Tasa de financiamiento ('+monedaLbl+')';
+    const nominal = tasasVisible.map(t=> act.saldo_producto_moneda==='usd' ? t.dolares : t.pesos);
+    const variacion = tasasVisible.map(t=> t.variacion_producto);
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--accent').trim();
+    const gold = styles.getPropertyValue('--gold').trim();
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = document.getElementById('tasaProductoChart').getContext('2d');
+    if(tasaProductoChart) tasaProductoChart.destroy();
+    tasaProductoChart = new Chart(ctx, {
+      type:'bar',
+      data:{ labels, datasets:[
+        { label: nominalLabel, data: nominal, backgroundColor: accent, borderRadius:5, maxBarThickness:22 },
+        { label: 'Variación interanual del precio del producto', data: variacion, backgroundColor: gold, borderRadius:5, maxBarThickness:22 },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+(c.raw!=null ? fmtPct.format(c.raw)+'%' : 'sin dato') } } },
+        scales:{
+          x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
+          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' } }
+        }
+      }
+    });
+
+    document.getElementById('tasaProductoLegend').innerHTML =
+      '<span><i style="background:'+accent+'"></i>'+nominalLabel+'</span>'
+      + '<span><i style="background:'+gold+'"></i>Variación interanual del precio ('+act.saldo_producto_fuente+')</span>';
+  }
+
   // Tarjetas de la pestaña Tasas: muestran la tasa nacional (de la actividad
   // elegida) en el trimestre del extremo derecho de la ventana del slider, en
   // pesos y en dólares, más la variación contra el trimestre INMEDIATO
@@ -1001,6 +1098,42 @@
     }
     wrap.appendChild(varTile('Variación tasa · pesos', cur && cur.pesos, prev && prev.pesos, prev && prev.periodo));
     wrap.appendChild(varTile('Variación tasa · dólares', cur && cur.dolares, prev && prev.dolares, prev && prev.periodo));
+
+    // Tasa producto: compara la tasa de financiamiento nominal de esta
+    // actividad (en la moneda que corresponde según su propio precio de
+    // producto -- act.saldo_producto_moneda, ver build_saldo_producto_precios.py)
+    // contra la variación INTERANUAL del precio de ese producto, para ver
+    // cuál de las dos creció más en el último año. Serie nueva e
+    // independiente de "Tasa real" (que sigue siendo nominal deflactada
+    // por IPC, sin cambios) -- pedido explícito de Ciro de no reemplazarla.
+    // Mismo criterio de "trimestre actual" que el resto de las tarjetas:
+    // el extremo derecho del slider. Solo existe para las 14 actividades
+    // con saldo producto; para las otras 7 se explica el motivo, igual que
+    // en la tarjeta de Saldo producto de Saldos.
+    const tileTasaProducto = document.createElement('div'); tileTasaProducto.className='tile';
+    if(!act.saldo_producto_disponible){
+      tileTasaProducto.innerHTML = '<div class="label">Tasa producto</div>'
+        + '<div class="value mono">—</div>'
+        + '<div class="unit">'+(act.saldo_producto_motivo||'no disponible para esta actividad')+'</div>';
+    } else {
+      const monedaLbl = act.saldo_producto_moneda==='usd' ? 'dólares' : 'pesos';
+      const nominal = cur ? (act.saldo_producto_moneda==='usd' ? cur.dolares : cur.pesos) : null;
+      const variacion = cur ? cur.variacion_producto : null;
+      if(nominal!=null && variacion!=null){
+        const diff = nominal - variacion;
+        const subioTasa = diff>0, subioPrecio = diff<0;
+        const arrow = subioTasa ? '▲ subió más la tasa' : (subioPrecio ? '▲ subió más el precio' : '= subieron igual');
+        tileTasaProducto.innerHTML = '<div class="label">Tasa producto · '+PLABEL[per]+'</div>'
+          + '<div class="value mono">'+(diff>=0?'+':'')+fmt1.format(diff)+' pp</div>'
+          + '<span class="chip '+(subioTasa?'bad':'good')+'">'+arrow+'</span>'
+          + '<div class="unit">tasa en '+monedaLbl+' vs. variación interanual del precio</div>';
+      } else {
+        tileTasaProducto.innerHTML = '<div class="label">Tasa producto · '+PLABEL[per]+'</div>'
+          + '<div class="value mono">—</div>'
+          + '<div class="unit">sin variación interanual de precio disponible en '+PLABEL[per]+' (la serie de precios arranca en 2016)</div>';
+      }
+    }
+    wrap.appendChild(tileTasaProducto);
   }
 
   function renderTasasView(){
@@ -1038,9 +1171,29 @@
     } else {
       noteEl.style.display = 'none';
     }
+
+    // Aviso de "Tasa producto": distingue el motivo (igual criterio que la
+    // tarjeta) de simplemente faltar la variación interanual en algunos
+    // trimestres puntuales (en vez de a toda la actividad).
+    const noteElTP = document.getElementById('partialNoteTasaProducto');
+    const noteTextTP = document.getElementById('partialNoteTasaProductoText');
+    if(!act.saldo_producto_disponible){
+      noteTextTP.innerHTML = 'Esta actividad no tiene tasa producto: '+(act.saldo_producto_motivo||'no disponible para esta actividad')+'.';
+      noteElTP.style.display = 'flex';
+    } else {
+      const sinVariacion = act.tasas.filter(t=>t.variacion_producto===null).length;
+      if(sinVariacion>0){
+        noteTextTP.innerHTML = 'A esta actividad le falta la variación interanual del precio en '+sinVariacion+' de '+act.tasas.length+' trimestres (la serie de precios arranca en 2016, así que ese primer año queda sin dato interanual); esos períodos se omiten del gráfico.';
+        noteElTP.style.display = 'flex';
+      } else {
+        noteElTP.style.display = 'none';
+      }
+    }
+
     renderTasaTiles(act);
     renderTasaPesosChart(act);
     renderTasaDolaresChart(act);
+    renderTasaProductoChart(act);
     renderTasaProvinceMap(act);
   }
 
