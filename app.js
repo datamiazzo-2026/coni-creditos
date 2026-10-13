@@ -1364,8 +1364,6 @@
       const navLinkTP = document.querySelector('#tasasNav a[href="#tasas-producto"]');
       if(seccionTP) seccionTP.style.display = 'none';
       if(navLinkTP) navLinkTP.style.display = 'none';
-      const noteEl = document.getElementById('partialNoteTasas');
-      if(noteEl) noteEl.style.display = 'none';
       [tasaPesosChart, tasaDolaresChart, tasaProductoChart].forEach(c=>{ if(c) c.destroy(); });
       tasaPesosChart = tasaDolaresChart = tasaProductoChart = null;
 
@@ -1386,39 +1384,12 @@
     toggleTasasGroup(TASAS_IDS_REALES, true);
     setTasasNavActive('#tasas-panorama');
 
-    const noteEl = document.getElementById('partialNoteTasas');
-    const noteText = document.getElementById('partialNoteTasasText');
-    if(!act.tasas_completo){
-      // "tasas_completo" marca CUALQUIER trimestre sin dato (pesos o dólares),
-      // no solo un corte al final de la serie -- en la práctica, lo que pasa
-      // casi siempre es que a la actividad le faltan trimestres SUELTOS de
-      // dólares en el medio de la serie (sin saldo en esa moneda ese
-      // trimestre), con la serie completa hasta el último período igual que
-      // el resto. Por eso el mensaje distingue ambos casos en vez de asumir
-      // siempre un corte: decir "solo tiene tasa hasta <último período>"
-      // cuando ese último período es el mismo de toda la serie es engañoso.
-      const total = act.tasas.length;
-      const ultimoPeriodoSerie = PERIODOS[total-1];
-      const withData = act.tasas.filter(t=> t.pesos!==null || t.dolares!==null);
-      const lastT = withData[withData.length-1];
-      const esCorte = lastT && lastT.periodo !== ultimoPeriodoSerie;
-      if(!lastT){
-        noteText.innerHTML = 'Esta actividad no tiene tasa reportada.';
-      } else if(esCorte){
-        const soloPesos = withData.every(t=> t.dolares===null);
-        noteText.innerHTML = 'Esta actividad solo tiene tasa reportada hasta <b>'+PLABEL[lastT.periodo]+'</b>'+(soloPesos ? ', únicamente en pesos.' : '.');
-      } else {
-        const pesosNulls = act.tasas.filter(t=>t.pesos===null).length;
-        const dolaresNulls = act.tasas.filter(t=>t.dolares===null).length;
-        const bits = [];
-        if(pesosNulls>0) bits.push('en pesos ('+pesosNulls+' de '+total+' trimestres)');
-        if(dolaresNulls>0) bits.push('en dólares ('+dolaresNulls+' de '+total+' trimestres)');
-        noteText.innerHTML = 'A esta actividad le faltan trimestres sueltos de tasa reportada '+bits.join(' y ')+'; esos períodos se omiten de los gráficos.';
-      }
-      noteEl.style.display = 'flex';
-    } else {
-      noteEl.style.display = 'none';
-    }
+    // Si a la actividad le faltan trimestres sueltos de tasa (pesos y/o
+    // dólares) -- act.tasas_completo===false --, esos huecos simplemente
+    // quedan como huecos en las líneas de los gráficos, sin cartel de aviso
+    // (pedido explícito de Ciro, Oct-2026: se sacó el cartel de "faltan
+    // trimestres" en Tasas, mismo criterio ya aplicado antes a Tasa
+    // producto).
 
     // Sección "Tasa producto" entera (título, texto, gráfico y su propio
     // ítem en el menú de navegación de la pestaña): si la actividad no
