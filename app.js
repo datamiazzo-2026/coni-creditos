@@ -63,29 +63,32 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  // "Total Agro": actividad sintética que agrega las 21 actividades reales,
-  // solo para la pestaña Saldos (pedido de Ciro, Oct-2026) -- va FIJA arriba
-  // de la lista alfabética del sidebar (no se mezcla con ella) y es la que
-  // se ve por defecto al abrir el sitio. No se arma con una corrida nueva
-  // de build_data.py: se calcula acá mismo, en el navegador, a partir de
-  // datos que YA están en dashboard_data.json --
-  //   - Panorama/Evolución/Monedas salen de `resumen_nacional` (RN), que ya
-  //     trae el total agregado de las 21 actividades por trimestre (pesos,
-  //     dólares, total en US$ equiv. y tipo de cambio) -- es el mismo dato
-  //     que ya usan la tarjeta "Participación" de cada actividad y la
-  //     pestaña Resumen, solo que ahí se usa como denominador/ponderador y
-  //     acá se muestra directo.
+  // "Total Agro": actividad sintética que agrega las 21 actividades reales
+  // (pedido de Ciro, Oct-2026) -- va FIJA arriba de la lista alfabética del
+  // sidebar (no se mezcla con ella) y es la que se ve por defecto al abrir
+  // el sitio, tanto en Saldos como en Tasas. No se arma con una corrida
+  // nueva de build_data.py: se calcula acá mismo, en el navegador, a partir
+  // de datos que YA están en dashboard_data.json --
+  //   - Panorama/Evolución/Monedas (Saldos) salen de `resumen_nacional` (RN),
+  //     que ya trae el total agregado de las 21 actividades por trimestre
+  //     (pesos, dólares, total en US$ equiv. y tipo de cambio) -- es el mismo
+  //     dato que ya usa la tarjeta "Participación" de cada actividad.
   //   - "Pesos constantes" no viene en RN, así que se reconstruye: el factor
   //     de deflación de un trimestre es el mismo para TODAS las actividades
   //     (depende solo del IPC de ese trimestre, no de la actividad), así que
   //     alcanza con sacarlo de una sola actividad cualquiera (total_ars_constante
   //     / total_ars de ese trimestre) y aplicárselo al total nacional.
-  //   - Provincias se arma sumando, provincia por provincia y trimestre por
-  //     trimestre, el desglose de las 21 actividades (act.provincias_series).
-  // No tiene "saldo producto" (no hay un "producto" único para todo el
-  // agro) ni pestaña de Tasas (la tasa ponderada nacional ya se ve en
-  // Resumen) -- ver el manejo de ID_TOTAL_AGRO en el nav de pestañas y en
-  // el click del sidebar, más abajo.
+  //   - Provincias (Saldos) se arma sumando, provincia por provincia y
+  //     trimestre por trimestre, el desglose de las 21 actividades
+  //     (act.provincias_series).
+  //   - Tasas: usa directamente RN.tasa_pesos_ponderada/tasa_dolares_ponderada/
+  //     costo_efectivo_dolares (el contenido que antes vivía en la extinta
+  //     pestaña "Resumen" -- ver renderTasasView) en vez de `act.tasas`, así
+  //     que esta actividad sintética NO tiene campo `tasas` propio.
+  // No tiene "saldo producto" (no hay un "producto" único para todo el agro)
+  // ni "Participación" (comparado contra sí mismo siempre daría 100%) -- ver
+  // el manejo de ID_TOTAL_AGRO en el nav de pestañas y en el click del
+  // sidebar, más abajo.
   const ID_TOTAL_AGRO = 'total-agro';
   function buildTotalAgroActividad(){
     const refSeries = DATA.actividades[0].series;
@@ -229,9 +232,15 @@
 
   // El slider es un único elemento compartido entre pestañas (mismo estado,
   // mismos listeners) -- en vez de duplicarlo, lo movemos con appendChild
-  // al slot de la pestaña activa, siempre debajo del gráfico principal.
+  // al slot de la pestaña activa, siempre debajo del gráfico principal. En
+  // Tasas, "Total Agro" tiene su propio slot (rangeSlot-tasas-totalagro,
+  // dentro de resumen-panorama) porque vive en una sección distinta a la
+  // de las actividades reales (rangeSlot-tasas, dentro de tasas-panorama) --
+  // sin esto, el slider quedaría movido dentro de una sección oculta.
   function moveRangeSlider(){
-    const slot = document.getElementById('rangeSlot-'+state.tab);
+    let slotKey = state.tab;
+    if(state.tab==='tasas' && getAct(state.actId).esTotalAgro) slotKey = 'tasas-totalagro';
+    const slot = document.getElementById('rangeSlot-'+slotKey);
     const panel = document.querySelector('.rangepanel');
     if(slot && panel) slot.appendChild(panel);
   }
@@ -267,26 +276,14 @@
   function renderPills(container, onClick){
     container.innerHTML='';
     // "Total Agro" va fija arriba de la lista alfabética, no mezclada con
-    // ella -- pedido explícito de Ciro ("arriba de Bovinos"). Solo tiene
-    // sentido en la pestaña Saldos (no tiene tasas propias), así que
-    // elegirla desde cualquier otra pestaña fuerza la vuelta a Saldos (ver
-    // más abajo, en el click de este botón).
+    // ella -- pedido explícito de Ciro ("arriba de Bovinos"). Tiene vista
+    // propia tanto en Saldos como en Tasas, así que elegirla se comporta
+    // igual que elegir cualquier otra actividad: no hace falta forzar
+    // ningún cambio de pestaña (a diferencia de versiones anteriores).
     const bTotal = document.createElement('button');
     bTotal.className = 'sbrow sbrow-pinned' + (ID_TOTAL_AGRO===state.actId ? ' active':'');
     bTotal.innerHTML = '<span>'+TOTAL_AGRO_ACT.nombre+'</span>';
-    bTotal.addEventListener('click', ()=>{
-      state.actId = ID_TOTAL_AGRO;
-      if(state.tab!=='saldos'){
-        state.tab = 'saldos';
-        document.getElementById('tabsNav').querySelectorAll('button[data-tab]').forEach(c=>c.classList.toggle('active', c.dataset.tab==='saldos'));
-        document.getElementById('view-saldos').style.display = '';
-        document.getElementById('view-tasas').style.display = 'none';
-        document.getElementById('view-resumen').style.display = 'none';
-        document.getElementById('mainGrid').classList.remove('no-sidebar');
-        moveRangeSlider();
-      }
-      onClick();
-    });
+    bTotal.addEventListener('click', ()=>{ state.actId = ID_TOTAL_AGRO; onClick(); });
     container.appendChild(bTotal);
     ACTIVIDADES_ALFABETICO.forEach(a=>{
       const b = document.createElement('button');
@@ -303,17 +300,9 @@
     const btn = e.target.closest('button[data-tab]');
     if(!btn) return;
     state.tab = btn.dataset.tab;
-    // "Total Agro" no tiene pestaña de Tasas (ver renderPills) -- si estaba
-    // elegida y el usuario pasa a Tasas desde el nav de arriba (no desde el
-    // sidebar), cae a la primera actividad real en vez de romper la vista.
-    if(state.tab==='tasas' && state.actId===ID_TOTAL_AGRO){
-      state.actId = DATA.actividades[0].id;
-    }
     [...document.getElementById('tabsNav').children].forEach(c=>c.classList.toggle('active', c===btn));
     document.getElementById('view-saldos').style.display = state.tab==='saldos' ? '' : 'none';
     document.getElementById('view-tasas').style.display = state.tab==='tasas' ? '' : 'none';
-    document.getElementById('view-resumen').style.display = state.tab==='resumen' ? '' : 'none';
-    document.getElementById('mainGrid').classList.toggle('no-sidebar', state.tab==='resumen');
     moveRangeSlider();
     renderAll();
   });
@@ -1066,6 +1055,25 @@
       renderParticipChart(act);
     }
 
+    // Sección "Sectores" (¿qué lugar ocupa el agro en la economía?, torta
+    // comparando el agro contra el resto de los sectores): al revés que
+    // Participación, esta SOLO tiene sentido para "Total Agro" -- para una
+    // actividad puntual no hay forma de ubicarla dentro de la composición
+    // sectorial completa de la economía. Vivía en la extinta pestaña
+    // "Resumen"; se mudó acá (pedido explícito de Ciro, Oct-2026) porque es
+    // el único gráfico de esa pestaña que no es tema tasas.
+    const seccionSectores = document.getElementById('saldos-sectores');
+    const navLinkSectores = document.querySelector('#saldosNav a[href="#saldos-sectores"]');
+    if(act.esTotalAgro){
+      if(seccionSectores) seccionSectores.style.display = '';
+      if(navLinkSectores) navLinkSectores.style.display = '';
+      renderSectoresChart();
+    } else {
+      if(seccionSectores) seccionSectores.style.display = 'none';
+      if(navLinkSectores) navLinkSectores.style.display = 'none';
+      if(sectoresChart){ sectoresChart.destroy(); sectoresChart = null; }
+    }
+
     renderTiles(act);
     renderChart(act);
     renderMixChart(act);
@@ -1298,8 +1306,58 @@
     wrap.classList.toggle('tiles-5', act.saldo_producto_disponible);
   }
 
+  // Links de nav + secciones de cada "modo" de la pestaña Tasas: el set de
+  // una actividad real (planilla de tasas propia) y el de "Total Agro"
+  // (contenido que antes vivía en la extinta pestaña "Resumen" -- panorama
+  // nacional, evolución de la tasa ponderada, diferencial por actividad y
+  // costo efectivo pesos vs. dólares). Comparten la misma #tasasNav y el
+  // mismo #view-tasas; se esconde un set entero y se muestra el otro, mismo
+  // patrón de "ocultación completa" que el resto del sitio (ver Tasa
+  // producto/Participación/Sectores).
+  const TASAS_IDS_REALES = ['tasas-panorama','tasas-pesos','tasas-dolares','tasas-provincias'];
+  const TASAS_IDS_TOTALAGRO = ['resumen-panorama','resumen-tasas','resumen-diferencial','resumen-costo'];
+  function toggleTasasGroup(ids, show){
+    ids.forEach(id=>{
+      const el = document.getElementById(id); if(el) el.style.display = show ? '' : 'none';
+      const link = document.querySelector('#tasasNav a[href="#'+id+'"]'); if(link) link.style.display = show ? '' : 'none';
+    });
+  }
+  function setTasasNavActive(href){
+    document.querySelectorAll('#tasasNav a').forEach(a=> a.classList.toggle('active', a.getAttribute('href')===href));
+  }
+
   function renderTasasView(){
     const act = getAct(state.actId);
+    moveRangeSlider();
+
+    if(act.esTotalAgro){
+      toggleTasasGroup(TASAS_IDS_REALES, false);
+      const seccionTP = document.getElementById('tasas-producto');
+      const navLinkTP = document.querySelector('#tasasNav a[href="#tasas-producto"]');
+      if(seccionTP) seccionTP.style.display = 'none';
+      if(navLinkTP) navLinkTP.style.display = 'none';
+      const noteEl = document.getElementById('partialNoteTasas');
+      if(noteEl) noteEl.style.display = 'none';
+      [tasaPesosChart, tasaDolaresChart, tasaProductoChart].forEach(c=>{ if(c) c.destroy(); });
+      tasaPesosChart = tasaDolaresChart = tasaProductoChart = null;
+
+      toggleTasasGroup(TASAS_IDS_TOTALAGRO, true);
+      setTasasNavActive('#resumen-panorama');
+
+      renderResumenTiles();
+      renderResumenTasaChart();
+      renderDiffChart();
+      renderCostoChart();
+      return;
+    }
+
+    toggleTasasGroup(TASAS_IDS_TOTALAGRO, false);
+    if(resumenTasaChart){ resumenTasaChart.destroy(); resumenTasaChart = null; }
+    if(diffChart){ diffChart.destroy(); diffChart = null; }
+    if(costoChart){ costoChart.destroy(); costoChart = null; }
+    toggleTasasGroup(TASAS_IDS_REALES, true);
+    setTasasNavActive('#tasas-panorama');
+
     const noteEl = document.getElementById('partialNoteTasas');
     const noteText = document.getElementById('partialNoteTasasText');
     if(!act.tasas_completo){
@@ -1683,20 +1741,12 @@
       + '<span><i style="background:'+gold+'"></i>Crédito en dólares (costo efectivo en pesos)</span>';
   }
 
-  function renderResumenView(){
-    renderResumenTiles();
-    renderResumenTasaChart();
-    renderDiffChart();
-    renderCostoChart();
-    renderSectoresChart();
-  }
-
-  // Nav pegajosa de cada pestaña (Saldos, Tasas y Resumen comparten el mismo
-  // patrón: hilo narrativo con una pregunta por sección) -- resalta la
-  // sección visible a medida que se baja, usando IntersectionObserver en vez
-  // de un listener de scroll. Mientras la pestaña no es la activa, su
-  // #view-* está en display:none y no observa nada -- no hace falta
-  // reiniciarlo al cambiar de pestaña.
+  // Nav pegajosa de cada pestaña (Saldos y Tasas comparten el mismo patrón:
+  // hilo narrativo con una pregunta por sección) -- resalta la sección
+  // visible a medida que se baja, usando IntersectionObserver en vez de un
+  // listener de scroll. Mientras la pestaña no es la activa, su #view-*
+  // está en display:none y no observa nada -- no hace falta reiniciarlo al
+  // cambiar de pestaña.
   function initNarrativeNav(navId, tabName){
     const nav = document.getElementById(navId);
     if(!nav) return;
@@ -1723,7 +1773,12 @@
     // La última sección puede ser más corta que la "banda" de detección del
     // observer de arriba, así que su título nunca llega a cruzarla -- al
     // llegar al final de la página, se fuerza el último link como activo
-    // (patrón estándar para el último ítem de un scroll-spy).
+    // (patrón estándar para el último ítem de un scroll-spy). Se toma el
+    // último link VISIBLE (no simplemente el último del array): tanto
+    // saldosNav (Participación/Sectores) como tasasNav (actividad real vs.
+    // Total Agro) esconden algunos de sus links según la actividad elegida,
+    // así que el literal último <a> del HTML no siempre es el último que
+    // se ve en pantalla.
     let ticking = false;
     window.addEventListener('scroll', ()=>{
       if(state.tab!==tabName || ticking) return;
@@ -1731,13 +1786,15 @@
       requestAnimationFrame(()=>{
         ticking = false;
         const atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 4);
-        if(atBottom) setActive(links[links.length-1]);
+        if(atBottom){
+          const visibles = links.filter(a=> a.offsetParent !== null);
+          setActive(visibles[visibles.length-1] || links[links.length-1]);
+        }
       });
     }, { passive:true });
   }
   initNarrativeNav('saldosNav', 'saldos');
   initNarrativeNav('tasasNav', 'tasas');
-  initNarrativeNav('resumenNav', 'resumen');
 
   function syncPills(){
     renderPills(document.getElementById('actSidebar'), pillClicked);
@@ -1747,7 +1804,6 @@
     if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
   }
   function renderAll(){
-    if(state.tab==='resumen'){ renderResumenView(); return; }
     syncPills();
     if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
   }

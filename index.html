@@ -25,7 +25,6 @@
 <nav class="tabs" id="tabsNav">
   <button data-tab="saldos" class="active">Saldos</button>
   <button data-tab="tasas">Tasas</button>
-  <button data-tab="resumen">Resumen</button>
 </nav>
 
 <main id="mainGrid">
@@ -42,6 +41,7 @@
       <a href="#saldos-participacion">Participación</a>
       <a href="#saldos-monedas">Monedas</a>
       <a href="#saldos-provincias">Provincias</a>
+      <a href="#saldos-sectores">Sectores</a>
     </nav>
 
     <section class="resumen-section" id="saldos-panorama">
@@ -142,16 +142,54 @@
       </div>
     </section>
 
+    <section class="resumen-section" id="saldos-sectores">
+      <div class="resumen-eyebrow">Sectores</div>
+      <h2>¿Qué lugar ocupa el agro en la economía?</h2>
+      <div class="resumen-lede" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- para el trimestre y la moneda elegidos abajo.</div>
+      <div class="panel">
+        <div class="panelhead">
+          <div class="legend" id="sectoresLegend"></div>
+          <div class="segmented" id="sectoresCurSeg">
+            <button data-cur="corriente" class="active">Pesos corrientes</button>
+            <button data-cur="constante">Pesos constantes</button>
+            <button data-cur="dolares">Dólares (US$)</button>
+            <button data-cur="total">Total (US$ equiv.)</button>
+          </div>
+        </div>
+        <div class="provgrid">
+          <div class="chartwrap" style="height:280px;"><canvas id="sectoresChart"></canvas></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th style="width:22px"></th><th>Sector</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+              <tbody id="sectoresBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="rangehead" style="margin-top:18px;">
+          <div class="desc" style="margin-bottom:0;">Trimestre</div>
+          <div class="rangevalue mono" id="sectoresPeriodoLabel">—</div>
+        </div>
+        <div class="rangeslider" id="sectoresPeriodoSliderWrap">
+          <div class="rangetrack"><div class="rangefill" id="sectoresPeriodoFill"></div></div>
+          <input type="range" id="sectoresPeriodoSlider" class="rangeinput" min="0" max="0" step="1" value="0">
+        </div>
+      </div>
+    </section>
+
   </div>
 
   <div id="view-tasas" style="display:none;">
 
     <nav class="resumen-nav" id="tasasNav">
-      <a href="#tasas-panorama" class="active">Panorama</a>
+      <a href="#tasas-panorama">Panorama</a>
       <a href="#tasas-pesos">Tasa en pesos</a>
       <a href="#tasas-dolares">Tasa en dólares</a>
       <a href="#tasas-producto">Tasa producto</a>
       <a href="#tasas-provincias">Provincias</a>
+      <a href="#resumen-panorama">Panorama</a>
+      <a href="#resumen-tasas">Evolución</a>
+      <a href="#resumen-diferencial">Diferencial</a>
+      <a href="#resumen-costo">Costo efectivo</a>
     </nav>
 
     <section class="resumen-section" id="tasas-panorama">
@@ -235,30 +273,18 @@
       </div>
     </section>
 
-  </div>
-
-  <div id="view-resumen" style="display:none;">
-
-    <nav class="resumen-nav" id="resumenNav">
-      <a href="#resumen-panorama" class="active">Panorama</a>
-      <a href="#resumen-tasas">Tasas</a>
-      <a href="#resumen-diferencial">Diferencial</a>
-      <a href="#resumen-costo">Costo efectivo</a>
-      <a href="#resumen-sectores">Sectores</a>
-    </nav>
-
     <section class="resumen-section" id="resumen-panorama">
       <div class="resumen-eyebrow">Panorama</div>
-      <h2>El crédito al agro, en tres números</h2>
+      <h2>¿A qué tasa se financia el agro, en conjunto?</h2>
       <div class="resumen-lede">Panorama nacional: combina las <span id="nActividadesResumen">—</span> actividades, ponderando cada una por su peso relativo dentro del crédito total de cada trimestre.</div>
       <div class="tiles" id="resumenTiles"></div>
+      <div id="rangeSlot-tasas-totalagro"></div>
     </section>
 
     <section class="resumen-section" id="resumen-tasas">
-      <div class="resumen-eyebrow">Tasas</div>
-      <h2>¿A qué costo se financia el agro?</h2>
+      <div class="resumen-eyebrow">Evolución</div>
+      <h2>¿Cómo viene evolucionando la tasa?</h2>
       <div class="resumen-lede">Promedio de la tasa de cada actividad, ponderado por su participación en el saldo total de esa moneda. Metodología replicada del informe de CONINAGRO (valida contra Jun-25: 49,3% publicado vs. <span id="checkPesosJun25">—</span> calculado acá).</div>
-      <div id="rangeSlot-resumen"></div>
       <div class="panel">
         <div class="legend" id="resumenTasaLegend"></div>
         <div class="chartwrap"><canvas id="resumenTasaChart"></canvas></div>
@@ -285,40 +311,6 @@
       <div class="panel">
         <div class="legend" id="costoLegend"></div>
         <div class="chartwrap"><canvas id="costoChart"></canvas></div>
-      </div>
-    </section>
-
-    <section class="resumen-section" id="resumen-sectores">
-      <div class="resumen-eyebrow">Sectores</div>
-      <h2>¿Qué lugar ocupa el agro en la economía?</h2>
-      <div class="resumen-lede" id="sectoresDesc">Saldo total de todos los sectores -- no solo agro -- para el trimestre y la moneda elegidos abajo.</div>
-      <div class="panel">
-        <div class="panelhead">
-          <div class="legend" id="sectoresLegend"></div>
-          <div class="segmented" id="sectoresCurSeg">
-            <button data-cur="corriente" class="active">Pesos corrientes</button>
-            <button data-cur="constante">Pesos constantes</button>
-            <button data-cur="dolares">Dólares (US$)</button>
-            <button data-cur="total">Total (US$ equiv.)</button>
-          </div>
-        </div>
-        <div class="provgrid">
-          <div class="chartwrap" style="height:280px;"><canvas id="sectoresChart"></canvas></div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th style="width:22px"></th><th>Sector</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
-              <tbody id="sectoresBody"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="rangehead" style="margin-top:18px;">
-          <div class="desc" style="margin-bottom:0;">Trimestre</div>
-          <div class="rangevalue mono" id="sectoresPeriodoLabel">—</div>
-        </div>
-        <div class="rangeslider" id="sectoresPeriodoSliderWrap">
-          <div class="rangetrack"><div class="rangefill" id="sectoresPeriodoFill"></div></div>
-          <input type="range" id="sectoresPeriodoSlider" class="rangeinput" min="0" max="0" step="1" value="0">
-        </div>
       </div>
     </section>
 
