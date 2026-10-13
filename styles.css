@@ -109,6 +109,12 @@
   .sbrow .dot{
     width:5px; height:5px; border-radius:50%; background:var(--warn-text); opacity:.85; margin-top:5px; flex-shrink:0;
   }
+  /* "Total Agro": fija arriba de la lista alfabética del sidebar, separada
+     con un divisor para que se lea como algo distinto de las 21 actividades
+     de abajo (no es una más de ellas, es el agregado de todas). */
+  .sbrow-pinned{
+    font-weight:700; border-bottom:1px solid var(--border); margin-bottom:6px; padding-bottom:12px;
+  }
 
   @media (max-width:760px){
     main{grid-template-columns:1fr;}
@@ -119,6 +125,10 @@
     .sbrow{width:auto; padding:6px 1px; border-left:none; border-bottom:2px solid transparent;}
     .sbrow.active{background:transparent; border-left:none; border-bottom-color:var(--tab-active);}
     .sbrow .dot{margin-top:0;}
+    .sbrow-pinned{
+      border-bottom:none; margin-bottom:0; padding-bottom:6px;
+      border-right:1px solid var(--border); padding-right:14px; margin-right:2px;
+    }
   }
 
   .toolbar{

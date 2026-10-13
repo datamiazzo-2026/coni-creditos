@@ -63,7 +63,79 @@
     return {prefix:'US$', field:'total_usd', provField:'total_usd', label:'total, equivalente en US$'};
   }
 
-  const state = { tab:'saldos', actId: DATA.actividades[0].id, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false, evolMode:'saldo' };
+  // "Total Agro": actividad sintética que agrega las 21 actividades reales,
+  // solo para la pestaña Saldos (pedido de Ciro, Oct-2026) -- va FIJA arriba
+  // de la lista alfabética del sidebar (no se mezcla con ella) y es la que
+  // se ve por defecto al abrir el sitio. No se arma con una corrida nueva
+  // de build_data.py: se calcula acá mismo, en el navegador, a partir de
+  // datos que YA están en dashboard_data.json --
+  //   - Panorama/Evolución/Monedas salen de `resumen_nacional` (RN), que ya
+  //     trae el total agregado de las 21 actividades por trimestre (pesos,
+  //     dólares, total en US$ equiv. y tipo de cambio) -- es el mismo dato
+  //     que ya usan la tarjeta "Participación" de cada actividad y la
+  //     pestaña Resumen, solo que ahí se usa como denominador/ponderador y
+  //     acá se muestra directo.
+  //   - "Pesos constantes" no viene en RN, así que se reconstruye: el factor
+  //     de deflación de un trimestre es el mismo para TODAS las actividades
+  //     (depende solo del IPC de ese trimestre, no de la actividad), así que
+  //     alcanza con sacarlo de una sola actividad cualquiera (total_ars_constante
+  //     / total_ars de ese trimestre) y aplicárselo al total nacional.
+  //   - Provincias se arma sumando, provincia por provincia y trimestre por
+  //     trimestre, el desglose de las 21 actividades (act.provincias_series).
+  // No tiene "saldo producto" (no hay un "producto" único para todo el
+  // agro) ni pestaña de Tasas (la tasa ponderada nacional ya se ve en
+  // Resumen) -- ver el manejo de ID_TOTAL_AGRO en el nav de pestañas y en
+  // el click del sidebar, más abajo.
+  const ID_TOTAL_AGRO = 'total-agro';
+  function buildTotalAgroActividad(){
+    const refSeries = DATA.actividades[0].series;
+    const RN0 = DATA.resumen_nacional || [];
+    const series = PERIODOS.map((per, i)=>{
+      const rn = RN0[i];
+      if(!rn) return null;
+      const ref = refSeries[i];
+      const deflator = (ref && ref.total_ars) ? (ref.total_ars_constante / ref.total_ars) : 1;
+      const totalArs = rn.total_ars_nacional;
+      return {
+        periodo: rn.periodo,
+        tc: rn.tc,
+        total_ars: totalArs,
+        pesos_ars: rn.pesos_ars_nacional,
+        dolares_usd: rn.dolares_usd_nacional,
+        total_usd: (totalArs!=null && rn.tc) ? totalArs/rn.tc : null,
+        total_ars_constante: totalArs!=null ? totalArs*deflator : null,
+        saldo_producto: null,
+      };
+    });
+
+    const PROV_FIELDS = ['total_ars','pesos_ars','dolares_usd','total_usd','total_ars_constante'];
+    const provincias_series = PERIODOS.map((per, i)=>{
+      const out = {}; PROV_FIELDS.forEach(f=>{ out[f] = {}; });
+      DATA.actividades.forEach(act=>{
+        const entry = act.provincias_series && act.provincias_series[i];
+        if(!entry) return;
+        PROV_FIELDS.forEach(f=>{
+          const dict = entry[f];
+          if(!dict) return;
+          Object.entries(dict).forEach(([prov,val])=>{
+            if(val==null) return;
+            out[f][prov] = (out[f][prov]||0) + val;
+          });
+        });
+      });
+      return out;
+    });
+
+    return {
+      id: ID_TOTAL_AGRO, nombre: 'Total Agro', esTotalAgro: true,
+      saldo_producto_disponible: false,
+      saldos_total_completo: true, saldos_moneda_completo: true,
+      series, provincias_series,
+    };
+  }
+  const TOTAL_AGRO_ACT = buildTotalAgroActividad();
+
+  const state = { tab:'saldos', actId: ID_TOTAL_AGRO, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false, evolMode:'saldo' };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -177,7 +249,7 @@
     if(footerEl) footerEl.textContent = rango;
   })();
 
-  function getAct(id){ return DATA.actividades.find(a=>a.id===id); }
+  function getAct(id){ return id===ID_TOTAL_AGRO ? TOTAL_AGRO_ACT : DATA.actividades.find(a=>a.id===id); }
 
   // ---------- Activity sidebar ----------
   // El orden de DATA.actividades (el que arma build_data.py, agrupado por
@@ -194,6 +266,28 @@
 
   function renderPills(container, onClick){
     container.innerHTML='';
+    // "Total Agro" va fija arriba de la lista alfabética, no mezclada con
+    // ella -- pedido explícito de Ciro ("arriba de Bovinos"). Solo tiene
+    // sentido en la pestaña Saldos (no tiene tasas propias), así que
+    // elegirla desde cualquier otra pestaña fuerza la vuelta a Saldos (ver
+    // más abajo, en el click de este botón).
+    const bTotal = document.createElement('button');
+    bTotal.className = 'sbrow sbrow-pinned' + (ID_TOTAL_AGRO===state.actId ? ' active':'');
+    bTotal.innerHTML = '<span>'+TOTAL_AGRO_ACT.nombre+'</span>';
+    bTotal.addEventListener('click', ()=>{
+      state.actId = ID_TOTAL_AGRO;
+      if(state.tab!=='saldos'){
+        state.tab = 'saldos';
+        document.getElementById('tabsNav').querySelectorAll('button[data-tab]').forEach(c=>c.classList.toggle('active', c.dataset.tab==='saldos'));
+        document.getElementById('view-saldos').style.display = '';
+        document.getElementById('view-tasas').style.display = 'none';
+        document.getElementById('view-resumen').style.display = 'none';
+        document.getElementById('mainGrid').classList.remove('no-sidebar');
+        moveRangeSlider();
+      }
+      onClick();
+    });
+    container.appendChild(bTotal);
     ACTIVIDADES_ALFABETICO.forEach(a=>{
       const b = document.createElement('button');
       b.className = 'sbrow' + (a.id===state.actId ? ' active':'');
@@ -209,6 +303,12 @@
     const btn = e.target.closest('button[data-tab]');
     if(!btn) return;
     state.tab = btn.dataset.tab;
+    // "Total Agro" no tiene pestaña de Tasas (ver renderPills) -- si estaba
+    // elegida y el usuario pasa a Tasas desde el nav de arriba (no desde el
+    // sidebar), cae a la primera actividad real en vez de romper la vista.
+    if(state.tab==='tasas' && state.actId===ID_TOTAL_AGRO){
+      state.actId = DATA.actividades[0].id;
+    }
     [...document.getElementById('tabsNav').children].forEach(c=>c.classList.toggle('active', c===btn));
     document.getElementById('view-saldos').style.display = state.tab==='saldos' ? '' : 'none';
     document.getElementById('view-tasas').style.display = state.tab==='tasas' ? '' : 'none';
@@ -948,9 +1048,26 @@
       evolBtns.forEach(b=>b.classList.toggle('active', b.dataset.evolmode===state.evolMode));
     }
 
+    // Sección "Participación" (el peso histórico de la actividad dentro del
+    // crédito agro total, en línea de tiempo): para "Total Agro" no tiene
+    // sentido -- comparado contra sí mismo, sería siempre una línea plana
+    // en 100%. Se oculta entera (sección + link de nav), mismo patrón que
+    // el resto de las ocultaciones de esta vista (ver Saldo producto más
+    // arriba). Para el resto de las actividades sigue igual que siempre.
+    const seccionPart = document.getElementById('saldos-participacion');
+    const navLinkPart = document.querySelector('#saldosNav a[href="#saldos-participacion"]');
+    if(act.esTotalAgro){
+      if(seccionPart) seccionPart.style.display = 'none';
+      if(navLinkPart) navLinkPart.style.display = 'none';
+      if(participChart){ participChart.destroy(); participChart = null; }
+    } else {
+      if(seccionPart) seccionPart.style.display = '';
+      if(navLinkPart) navLinkPart.style.display = '';
+      renderParticipChart(act);
+    }
+
     renderTiles(act);
     renderChart(act);
-    renderParticipChart(act);
     renderMixChart(act);
     renderProvinceTable(act);
   }
