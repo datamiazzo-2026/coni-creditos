@@ -138,7 +138,7 @@
   }
   const TOTAL_AGRO_ACT = buildTotalAgroActividad();
 
-  const state = { tab:'saldos', actId: ID_TOTAL_AGRO, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', diffExpanded:false, evolMode:'saldo' };
+  const state = { tab:'saldos', actId: ID_TOTAL_AGRO, cur:'total', curTasaProv:'pesos', tasaPesosMode:'nominal', rangeStart:0, rangeEnd: PERIODOS.length-1, sectorPeriodoIdx: PERIODOS.length-1, curSectores:'corriente', composicionPeriodoIdx: PERIODOS.length-1, curComposicion:'total', diffExpanded:false, evolMode:'saldo' };
 
   // Panel de mapa + ranking por provincia: lo usan tanto Saldos (por moneda)
   // como Tasas (por tasa en pesos). En vez de duplicar el manejo de tooltip
@@ -468,6 +468,17 @@
       state.curSectores = btn.dataset.cur;
       [...sectoresCurSegEl.children].forEach(c=>c.classList.toggle('active', c===btn));
       renderSectoresChart();
+    });
+  }
+
+  const composicionCurSegEl = document.getElementById('composicionCurSeg');
+  if(composicionCurSegEl){
+    composicionCurSegEl.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-cur]');
+      if(!btn) return;
+      state.curComposicion = btn.dataset.cur;
+      [...composicionCurSegEl.children].forEach(c=>c.classList.toggle('active', c===btn));
+      renderComposicionChart();
     });
   }
 
@@ -1055,6 +1066,23 @@
       renderParticipChart(act);
     }
 
+    // Sección "Composición" (de qué actividades se arma el total del agro):
+    // igual que Sectores, SOLO tiene sentido para "Total Agro" -- para una
+    // actividad puntual no hay nada que discriminar dentro de sí misma.
+    // Pedido explícito de Ciro, Oct-2026: réplica del panel de Sectores, un
+    // escalón "adentro" de él (va justo antes en el nav).
+    const seccionComposicion = document.getElementById('saldos-composicion');
+    const navLinkComposicion = document.querySelector('#saldosNav a[href="#saldos-composicion"]');
+    if(act.esTotalAgro){
+      if(seccionComposicion) seccionComposicion.style.display = '';
+      if(navLinkComposicion) navLinkComposicion.style.display = '';
+      renderComposicionChart();
+    } else {
+      if(seccionComposicion) seccionComposicion.style.display = 'none';
+      if(navLinkComposicion) navLinkComposicion.style.display = 'none';
+      if(composicionChart){ composicionChart.destroy(); composicionChart = null; }
+    }
+
     // Sección "Sectores" (¿qué lugar ocupa el agro en la economía?, torta
     // comparando el agro contra el resto de los sectores): al revés que
     // Participación, esta SOLO tiene sentido para "Total Agro" -- para una
@@ -1550,6 +1578,143 @@
         return '<tr><td><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:'+sectorColor(k)+'"></i></td>'
           + '<td>'+SECTOR_DISPLAY_LABELS[k]+'</td>'
           + '<td class="num mono">'+fmtMillones(v, meta.prefix)+'</td>'
+          + '<td class="num mono">'+fmtPct.format(pct)+'%</td></tr>';
+      }).join('');
+    }
+  }
+
+  // ---------- Composición del crédito agro, por actividad (Total Agro / Saldos) ----------
+  // Réplica directa del panel "Sectores" de arriba, pero discriminando las 21
+  // actividades del agro entre sí en vez de comparar agro contra el resto de
+  // la economía (pedido explícito de Ciro, Oct-2026: "antes del actual
+  // gráfico de tortas... repliquemos, pero con el objetivo de mostrar la
+  // composición de las 21 actividades"). Mismos controles (torta + tabla +
+  // selector de moneda + slider de trimestre), mismo criterio de agrupar lo
+  // chico en "Otras" para que la lista lateral no tenga 21 filas.
+  //
+  // Qué 6 actividades son "las nombradas" es FIJO (no se recalcula según el
+  // trimestre o la moneda elegidos): se decide UNA sola vez acá, por volumen
+  // total (US$ equivalente) en el último trimestre de la serie, y de ahí en
+  // más esas 6 mantienen siempre el mismo color y lugar en la leyenda. Si en
+  // vez de esto el "top 6" se recalculara en cada render, una actividad
+  // podría cambiar de color (o directamente aparecer/desaparecer de la
+  // leyenda) solo por mover el slider a otro trimestre o cambiar de moneda,
+  // lo cual rompe la regla básica de color categórico: el color identifica
+  // a la actividad, no a su posición en el ranking de ese momento (ver
+  // skill de dataviz, "color follows the entity, never its rank"). El resto
+  // de las actividades -- sean grandes o chicas ESE trimestre puntual -- cae
+  // siempre en "Otras".
+  const COMPOSICION_TOP_IDS = (function(){
+    const lastIdx = PERIODOS.length - 1;
+    return DATA.actividades.slice()
+      .sort((a,b)=>{
+        const va = a.series[lastIdx] ? a.series[lastIdx].total_usd : null;
+        const vb = b.series[lastIdx] ? b.series[lastIdx].total_usd : null;
+        return (vb||0) - (va||0);
+      })
+      .slice(0,6)
+      .map(a=>a.id);
+  })();
+  // Mismos 6 colores ya validados para el anillo de "Sectores" (ver
+  // SECTOR_CSS_VAR más arriba) -- misma paleta, mismo chequeo de daltonismo,
+  // sin necesidad de validar una nueva. "Otras" usa el mismo gris que
+  // "Otros" en Sectores (--sector-otros).
+  const COMPOSICION_COLORS = ['--sector-industria','--sector-comercio','--sector-agro','--sector-construccion','--sector-personas','--sector-servicios'];
+  function composicionColorFor(actId){
+    const idx = COMPOSICION_TOP_IDS.indexOf(actId);
+    const varName = idx>=0 ? COMPOSICION_COLORS[idx] : '--sector-otros';
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  let composicionChart;
+  const composicionSlider = document.getElementById('composicionPeriodoSlider');
+  const composicionFill = document.getElementById('composicionPeriodoFill');
+  const composicionPeriodoLabel = document.getElementById('composicionPeriodoLabel');
+  if(composicionSlider){
+    composicionSlider.max = String(PERIODOS.length - 1);
+    composicionSlider.value = String(state.composicionPeriodoIdx);
+    composicionSlider.addEventListener('input', ()=>{
+      state.composicionPeriodoIdx = Number(composicionSlider.value);
+      renderComposicionChart();
+    });
+  }
+  function updateComposicionSliderUI(){
+    const lastIdx = PERIODOS.length - 1;
+    const pct = lastIdx ? (state.composicionPeriodoIdx / lastIdx * 100) : 100;
+    if(composicionFill){ composicionFill.style.left = '0%'; composicionFill.style.right = (100 - pct) + '%'; }
+    if(composicionPeriodoLabel) composicionPeriodoLabel.textContent = PLABEL[PERIODOS[state.composicionPeriodoIdx]];
+  }
+
+  function renderComposicionChart(){
+    const legendEl = document.getElementById('composicionLegend');
+    const bodyEl = document.getElementById('composicionBody');
+    if(!document.getElementById('composicionChart')) return;
+
+    updateComposicionSliderUI();
+
+    const idx = state.composicionPeriodoIdx;
+    const meta = currencyMeta(state.curComposicion);
+
+    const topRows = COMPOSICION_TOP_IDS.map(id=>{
+      const act = DATA.actividades.find(a=>a.id===id);
+      const s = act.series[idx];
+      return { id, nombre: act.nombre, valor: (s ? s[meta.field] : null) || 0 };
+    });
+    const topTotal = topRows.reduce((sum,r)=>sum+r.valor, 0);
+    let otrasTotal = 0;
+    DATA.actividades.forEach(act=>{
+      if(COMPOSICION_TOP_IDS.includes(act.id)) return;
+      const s = act.series[idx];
+      otrasTotal += (s ? s[meta.field] : null) || 0;
+    });
+    const total = topTotal + otrasTotal;
+
+    if(!total){
+      if(composicionChart){ composicionChart.destroy(); composicionChart = null; }
+      if(legendEl) legendEl.innerHTML = '';
+      if(bodyEl) bodyEl.innerHTML = '<tr><td colspan="4">Sin datos de composición para este trimestre.</td></tr>';
+      return;
+    }
+
+    const rows = topRows.concat([{ id:null, nombre:'Otras', valor: otrasTotal }]);
+    const rowsSorted = rows.slice().sort((a,b)=>b.valor-a.valor);
+
+    const ctx = document.getElementById('composicionChart').getContext('2d');
+    if(composicionChart) composicionChart.destroy();
+    const surfaceColor = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+    composicionChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: rows.map(r=>r.nombre),
+        datasets: [{
+          data: rows.map(r=>r.valor),
+          backgroundColor: rows.map(r=>composicionColorFor(r.id)),
+          borderColor: surfaceColor, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c)=>{
+            const v = c.raw; const pct = total ? (v/total*100) : 0;
+            return c.label + ': ' + fmtMillones(v, meta.prefix) + ' (' + fmtPct.format(pct) + '%)';
+          } } },
+        },
+      },
+    });
+
+    if(legendEl){
+      legendEl.innerHTML = rows.map(r=>
+        '<span><i style="background:'+composicionColorFor(r.id)+'"></i>'+r.nombre+'</span>'
+      ).join('');
+    }
+    if(bodyEl){
+      bodyEl.innerHTML = rowsSorted.map(r=>{
+        const pct = total ? (r.valor/total*100) : 0;
+        return '<tr><td><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:'+composicionColorFor(r.id)+'"></i></td>'
+          + '<td>'+r.nombre+'</td>'
+          + '<td class="num mono">'+fmtMillones(r.valor, meta.prefix)+'</td>'
           + '<td class="num mono">'+fmtPct.format(pct)+'%</td></tr>';
       }).join('');
     }

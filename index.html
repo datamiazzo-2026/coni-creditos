@@ -41,6 +41,7 @@
       <a href="#saldos-participacion">Participación</a>
       <a href="#saldos-monedas">Monedas</a>
       <a href="#saldos-provincias">Provincias</a>
+      <a href="#saldos-composicion">Composición</a>
       <a href="#saldos-sectores">Sectores</a>
     </nav>
 
@@ -139,6 +140,40 @@
           </div>
         </div>
         <div class="provtooltip" id="provTooltip" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-composicion">
+      <div class="resumen-eyebrow">Composición</div>
+      <h2>¿Qué actividades componen el crédito agro?</h2>
+      <div class="resumen-lede" id="composicionDesc">Saldo de las 21 actividades del agro, para el trimestre y la moneda elegidos abajo. Se muestran las 6 de mayor volumen; el resto se agrupa en "Otras".</div>
+      <div class="panel">
+        <div class="panelhead">
+          <div class="legend" id="composicionLegend"></div>
+          <div class="segmented" id="composicionCurSeg">
+            <button data-cur="total" class="active">Total (US$ equiv.)</button>
+            <button data-cur="pesos">Pesos ($)</button>
+            <button data-cur="dolares">Dólares (US$)</button>
+            <button data-cur="constante">Pesos constantes</button>
+          </div>
+        </div>
+        <div class="provgrid">
+          <div class="chartwrap" style="height:280px;"><canvas id="composicionChart"></canvas></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th style="width:22px"></th><th>Actividad</th><th class="num">Saldo</th><th class="num">% del total</th></tr></thead>
+              <tbody id="composicionBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="rangehead" style="margin-top:18px;">
+          <div class="desc" style="margin-bottom:0;">Trimestre</div>
+          <div class="rangevalue mono" id="composicionPeriodoLabel">—</div>
+        </div>
+        <div class="rangeslider" id="composicionPeriodoSliderWrap">
+          <div class="rangetrack"><div class="rangefill" id="composicionPeriodoFill"></div></div>
+          <input type="range" id="composicionPeriodoSlider" class="rangeinput" min="0" max="0" step="1" value="0">
+        </div>
       </div>
     </section>
 
