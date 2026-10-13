@@ -103,6 +103,22 @@
   const provPanelSaldos = makeProvincePanel('provMap','provTooltip','provBody');
   const provPanelTasas = makeProvincePanel('tasaProvMap','tasaProvTooltip','tasaProvBody');
 
+  // El SVG del mapa (paths + listeners de hover) se arma una sola vez por
+  // pestaña -- ver `mapEl.dataset.built` más abajo -- para no reconstruir
+  // 24 paths en cada render. Pero los VALORES que muestra el tooltip al
+  // pasar el mouse (saldo/tasa por provincia) cambian con la actividad, la
+  // moneda o el trimestre elegidos, que sí se recalculan en cada render.
+  // Si el listener de "mouseenter" leyera esos valores de variables
+  // capturadas en el momento de construir el SVG, quedarían congelados en
+  // los de la primera vez que se dibujó el mapa -- el color del mapa se
+  // actualizaría bien (eso pasa afuera del `if(!dataset.built)`) pero el
+  // tooltip mostraría siempre los datos de la actividad inicial. Por eso
+  // el listener lee de estos dos objetos "vivos", que SÍ se reescriben en
+  // cada render (ver renderProvinceTable/renderTasaProvinceMap), en vez de
+  // cerrar sobre variables locales de la llamada que construyó el SVG.
+  let provMapLiveSaldos = { valByProv:{}, total:0 };
+  let provMapLiveTasas = { valByProv:{}, min:0, max:0, span:1 };
+
   // ---------- Slider de ventana de tiempo (compartido entre pestañas) ----------
   const rangeMin = document.getElementById('rangeMin');
   const rangeMax = document.getElementById('rangeMax');
@@ -727,6 +743,13 @@
     // -------- Mapa --------
     const mapEl = document.getElementById('provMap');
     const valByProv = Object.fromEntries(entries);
+    // Se reescribe en CADA render (no solo la primera vez) -- es lo que lee
+    // el listener de "mouseenter" de abajo, para no quedar con los valores
+    // de la actividad/moneda/trimestre con que se construyó el SVG la
+    // primera vez (ver comentario junto a la declaración de
+    // provMapLiveSaldos, más arriba).
+    provMapLiveSaldos.valByProv = valByProv;
+    provMapLiveSaldos.total = total;
     if(!mapEl.dataset.built){
       const svgParts = ['<svg viewBox="'+AR_MAP.viewBox+'" preserveAspectRatio="xMidYMid meet">'];
       Object.keys(AR_MAP.paths).forEach(function(name){
@@ -740,8 +763,8 @@
         el.addEventListener('mouseenter', function(evt){
           const name = el.dataset.prov;
           provPanelSaldos.setHover(name);
-          const val = valByProv[name];
-          const pct = val!=null && total ? val/total*100 : null;
+          const val = provMapLiveSaldos.valByProv[name];
+          const pct = val!=null && provMapLiveSaldos.total ? val/provMapLiveSaldos.total*100 : null;
           const prefix = currencyMeta(state.cur).prefix;
           provPanelSaldos.showTooltip('<b>'+name+'</b><br>'+(val!=null ? fmtMillones(val, prefix)+(pct!=null?' · '+fmtPct.format(pct)+'% del total':'') : 'sin desglose disponible'), evt);
         });
@@ -811,6 +834,11 @@
     const min = entries.length ? entries[entries.length-1][1] : 0;
     const span = (max-min) || 1;
     const valByProv = Object.fromEntries(entries);
+    // Igual que en renderProvinceTable (Saldos): se reescribe en CADA
+    // render para que el listener de "mouseenter" (atado una sola vez, ver
+    // dataset.built abajo) no quede leyendo los valores de la
+    // actividad/moneda/trimestre con que se construyó el SVG la primera vez.
+    provMapLiveTasas.valByProv = valByProv;
 
     // -------- Mapa --------
     const mapEl = document.getElementById('tasaProvMap');
@@ -827,7 +855,7 @@
         el.addEventListener('mouseenter', function(evt){
           const name = el.dataset.prov;
           provPanelTasas.setHover(name);
-          const val = valByProv[name];
+          const val = provMapLiveTasas.valByProv[name];
           provPanelTasas.showTooltip('<b>'+name+'</b><br>'+(val!=null ? fmtPct.format(val)+'% TNA' : 'sin dato disponible'), evt);
         });
         el.addEventListener('mousemove', provPanelTasas.moveTooltip);
