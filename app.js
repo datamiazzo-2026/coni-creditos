@@ -337,7 +337,7 @@
   initInfoTooltip('#evolModeSeg .seg-item',
     '<b>¿Qué es "Saldo producto"?</b>Convierte el saldo de crédito en la cantidad física equivalente del producto de esta actividad (toneladas, litros, kg o cajas, según corresponda), dividiendo el saldo por el precio de ese producto en el mismo trimestre.');
   initInfoTooltip('#tasas-producto .seg-item',
-    '<b>¿Qué es "Tasa producto"?</b>Compara, para esta actividad, cuánto subió la tasa de financiamiento contra cuánto subió el precio de su propio producto en los últimos 12 meses -- para ver cuál de las dos creció más, y por cuántos puntos.');
+    '<b>¿Qué es "Tasa producto"?</b>Es la diferencia, en puntos porcentuales, entre cuánto subió la tasa de financiamiento de esta actividad y cuánto subió el precio de su propio producto en los últimos 12 meses. Positivo (rojo): creció más la tasa. Negativo (verde): creció más el precio.');
 
   document.getElementById('tasaProvCurSeg').addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-cur]');
@@ -1013,52 +1013,59 @@
     });
   }
 
-  // Gráfico de "Tasa producto": dos series lado a lado por trimestre --
-  // la tasa de financiamiento nominal (en la moneda que corresponde según
-  // el precio de esta actividad) y la variación interanual del precio de
-  // su propio producto -- para que se vea de un vistazo cuál de las dos
-  // viene creciendo más. A diferencia de "Tasa real" (que deflacta un solo
-  // número por IPC), acá se muestran las DOS series separadas a propósito:
-  // Ciro pidió explícitamente "ver cuál creció más y en cuánto", no un
-  // único valor ya neteado -- la tarjeta de Panorama (renderTasaTiles) es
-  // la que sí resume la diferencia en un solo número de puntos porcentuales.
+  // Gráfico de "Tasa producto": UNA sola línea por trimestre con el
+  // resultado ya neteado -- tasa de financiamiento nominal (en la moneda
+  // que corresponde según el precio de esta actividad) MENOS la variación
+  // interanual del precio de su propio producto. Mismo cálculo que ya
+  // usaba la tarjeta de Panorama (renderTasaTiles): positivo = creció más
+  // la tasa (rojo), negativo = creció más el precio del producto (verde).
+  // Antes acá se mostraban las dos series por separado en barras; Ciro
+  // pidió mostrar directamente el resultado final como línea (Oct-2026).
   function renderTasaProductoChart(act){
     const periodosVisible = PERIODOS.slice(state.rangeStart, state.rangeEnd+1);
     const labels = periodosVisible.map(p=>PLABEL[p]);
     const tasasVisible = act.tasas.slice(state.rangeStart, state.rangeEnd+1);
     const monedaLbl = act.saldo_producto_moneda==='usd' ? 'dólares' : 'pesos';
-    const nominalLabel = 'Tasa de financiamiento ('+monedaLbl+')';
-    const nominal = tasasVisible.map(t=> act.saldo_producto_moneda==='usd' ? t.dolares : t.pesos);
-    const variacion = tasasVisible.map(t=> t.variacion_producto);
+    const tasaProducto = tasasVisible.map(t=>{
+      const nominal = act.saldo_producto_moneda==='usd' ? t.dolares : t.pesos;
+      const variacion = t.variacion_producto;
+      return (nominal!=null && variacion!=null) ? nominal - variacion : null;
+    });
 
     const styles = getComputedStyle(document.documentElement);
-    const accent = styles.getPropertyValue('--accent').trim();
-    const gold = styles.getPropertyValue('--gold').trim();
     const textColor = styles.getPropertyValue('--text-muted').trim();
     const gridColor = styles.getPropertyValue('--border').trim();
+    const badColor = styles.getPropertyValue('--bad-text').trim();
+    const goodColor = styles.getPropertyValue('--good-text').trim();
+    const colorFor = (v)=> v==null ? textColor : (v>=0 ? badColor : goodColor);
 
     const ctx = document.getElementById('tasaProductoChart').getContext('2d');
     if(tasaProductoChart) tasaProductoChart.destroy();
     tasaProductoChart = new Chart(ctx, {
-      type:'bar',
+      type:'line',
       data:{ labels, datasets:[
-        { label: nominalLabel, data: nominal, backgroundColor: accent, borderRadius:5, maxBarThickness:22 },
-        { label: 'Variación interanual del precio del producto', data: variacion, backgroundColor: gold, borderRadius:5, maxBarThickness:22 },
+        { label:'Tasa producto', data: tasaProducto,
+          borderWidth:2.5, pointRadius:3.5, pointHoverRadius:6, tension:0, spanGaps:false,
+          pointBackgroundColor: tasaProducto.map(colorFor),
+          pointBorderColor: tasaProducto.map(colorFor),
+          segment:{ borderColor: (c)=> colorFor(((c.p0.parsed.y||0)+(c.p1.parsed.y||0))/2) },
+          borderColor: badColor,
+        },
       ]},
       options:{
         responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{display:false},
-          tooltip:{ callbacks:{ label:(c)=> c.dataset.label+': '+(c.raw!=null ? fmtPct.format(c.raw)+'%' : 'sin dato') } } },
+          tooltip:{ callbacks:{ label:(c)=> c.raw!=null ? ((c.raw>=0?'+':'')+fmt1.format(c.raw)+' pp') : 'sin dato' } } },
         scales:{
           x:{ grid:{display:false}, ticks:{ color:textColor, font:{size:11.5, weight:600} } },
-          y:{ grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> v+'%' } }
+          y:{ grid:{ color:(c)=> c.tick.value===0 ? textColor : gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> (v>0?'+':'')+v+' pp' } }
         }
       }
     });
 
     document.getElementById('tasaProductoLegend').innerHTML =
-      '<span><i style="background:'+accent+'"></i>'+nominalLabel+'</span>'
-      + '<span><i style="background:'+gold+'"></i>Variación interanual del precio ('+act.saldo_producto_fuente+')</span>';
+      '<span><i style="background:'+badColor+'"></i>Creció más la tasa ('+monedaLbl+')</span>'
+      + '<span><i style="background:'+goodColor+'"></i>Creció más el precio del producto</span>';
   }
 
   // Tarjetas de la pestaña Tasas: muestran la tasa nacional (de la actividad
@@ -1186,18 +1193,14 @@
     // ítem en el menú de navegación de la pestaña): si la actividad no
     // tiene saldo producto, no aparece NADA de esto -- ni la tarjeta (ver
     // renderTasaTiles), ni esta sección, ni su link de navegación (pedido
-    // explícito de Ciro, Oct-2026). Antes la sección se mostraba igual con
-    // un aviso explicando el motivo; ahora, para esas 7 actividades, se
-    // oculta por completo, como si "tasa producto" no existiera para esa
-    // actividad. El aviso de "faltan algunos trimestres sueltos" se
-    // conserva tal cual para las 14 actividades que SÍ tienen tasa
-    // producto pero les falta la variación interanual en algún trimestre
-    // puntual (ej.: 2016, antes de que arranque la serie de precios) --
-    // eso es un caso distinto, de dato parcial, no de "no disponible".
+    // explícito de Ciro, Oct-2026). Para las 14 actividades que sí tienen
+    // tasa producto, los trimestres sin variación interanual de precio
+    // (ej.: 2016, antes de que arranque la serie de precios) simplemente
+    // quedan como huecos en la línea del gráfico -- sin cartel de aviso
+    // (pedido explícito de Ciro, Oct-2026: se sacó el cartel de "faltan
+    // trimestres").
     const seccionTP = document.getElementById('tasas-producto');
     const navLinkTP = document.querySelector('#tasasNav a[href="#tasas-producto"]');
-    const noteElTP = document.getElementById('partialNoteTasaProducto');
-    const noteTextTP = document.getElementById('partialNoteTasaProductoText');
     if(!act.saldo_producto_disponible){
       if(seccionTP) seccionTP.style.display = 'none';
       if(navLinkTP) navLinkTP.style.display = 'none';
@@ -1205,13 +1208,6 @@
     } else {
       if(seccionTP) seccionTP.style.display = '';
       if(navLinkTP) navLinkTP.style.display = '';
-      const sinVariacion = act.tasas.filter(t=>t.variacion_producto===null).length;
-      if(sinVariacion>0){
-        noteTextTP.innerHTML = 'A esta actividad le falta la variación interanual del precio en '+sinVariacion+' de '+act.tasas.length+' trimestres (la serie de precios arranca en 2016, así que ese primer año queda sin dato interanual); esos períodos se omiten del gráfico.';
-        noteElTP.style.display = 'flex';
-      } else {
-        noteElTP.style.display = 'none';
-      }
       renderTasaProductoChart(act);
     }
 
