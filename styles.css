@@ -192,21 +192,24 @@
   }
   .tile{padding:16px 18px; border-right:1px solid var(--border);}
   .tile:last-child{border-right:none;}
-  /* #tiles (Saldos) tiene 5 tarjetas desde que se agregó "Saldo producto",
-     no 4 como #tasaTiles/#resumenTiles -- se le da su propia grilla de 5
-     columnas (en vez de las 4 de ".tiles") para que las 5 entren en una
-     sola fila en escritorio, sin fila extra con una sola tarjeta suelta.
-     Con 5 columnas exactas la última tarjeta ya es :last-child del DOM
-     normalmente, así que la regla de arriba le saca el borde sola -- no
-     hace falta ningún nth-child extra como con 4 columnas. SOLO en
-     escritorio (>820px): un selector por #id gana por especificidad a
-     ".tiles" aunque esté definido ANTES que el media query de mobile más
-     abajo, así que si esta regla no quedara encerrada en su propio media
-     query de escritorio, pisaría también el "repeat(2,1fr)" de mobile. */
-  /* #tasaTiles (Tasas) pasó a tener 5 tarjetas también, desde que se agregó
-     "Tasa producto" -- mismo criterio y mismo motivo que #tiles arriba. */
+  /* #tiles (Saldos) y #tasaTiles (Tasas) pasan a 5 tarjetas en escritorio
+     SOLO cuando la actividad elegida tiene saldo producto / tasa producto
+     (clase modificadora ".tiles-5", que app.js prende o apaga en cada
+     render de renderTiles()/renderTasaTiles() según
+     act.saldo_producto_disponible) -- para las 7 actividades sin esos
+     datos, la tarjeta de más directamente no se crea (pedido de Ciro,
+     Oct-2026: que no quede ni rastro, ni "no disponible"), así que la
+     grilla vuelve a sus 4 columnas de siempre, sin un hueco vacío donde
+     iría la 5ta. Con 5 tarjetas exactas la última ya es :last-child del
+     DOM, así que la regla de arriba le saca el borde sola -- no hace
+     falta ningún nth-child extra. SOLO en escritorio (>820px): un
+     selector por clase dentro de este media query sigue ganando por
+     especificidad a ".tiles" aunque esté definida antes que el media
+     query de mobile más abajo, así que si esta regla no quedara
+     encerrada en su propio media query de escritorio, pisaría también el
+     "repeat(2,1fr)" de mobile. */
   @media (min-width:821px){
-    #tiles, #tasaTiles{grid-template-columns:repeat(5,1fr);}
+    #tiles.tiles-5, #tasaTiles.tiles-5{grid-template-columns:repeat(5,1fr);}
     #tiles .tile, #tasaTiles .tile{padding:14px 14px;}
   }
   .tile .label{font-size:10.5px; font-weight:700; letter-spacing:.5px; color:var(--text-faint); text-transform:uppercase;}

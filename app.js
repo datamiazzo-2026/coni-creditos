@@ -598,15 +598,14 @@
     // período actual" hablen siempre del mismo trimestre. Solo existe para
     // 14 de las 21 actividades (act.saldo_producto_disponible); para las
     // otras 7 (servicios, catch-alls sin precio propio, azúcar sin ningún
-    // dato, y procesamiento de carnes excluido a pedido de Ciro) se explica
-    // el motivo en la propia tarjeta en vez de solo mostrar "—".
-    const tileSaldoProducto = document.createElement('div');
-    tileSaldoProducto.className='tile';
-    if(!act.saldo_producto_disponible){
-      tileSaldoProducto.innerHTML = '<div class="label">Saldo producto</div>'
-        + '<div class="value mono">—</div>'
-        + '<div class="unit">'+(act.saldo_producto_motivo||'no disponible para esta actividad')+'</div>';
-    } else {
+    // dato, y procesamiento de carnes excluido a pedido de Ciro) la tarjeta
+    // directamente NO se muestra (pedido explícito de Ciro, Oct-2026: antes
+    // se mostraba igual con el motivo de por qué no, pero prefirió que para
+    // esas 7 actividades no aparezca ni rastro de saldo producto, ni acá ni
+    // en el toggle de Evolución -- ver renderSaldosView).
+    if(act.saldo_producto_disponible){
+      const tileSaldoProducto = document.createElement('div');
+      tileSaldoProducto.className='tile';
       const spVal = sActP ? sActP.saldo_producto : null;
       if(spVal!=null){
         tileSaldoProducto.innerHTML = '<div class="label">Saldo producto · '+PLABEL[perP]+'</div>'
@@ -617,8 +616,14 @@
           + '<div class="value mono">—</div>'
           + '<div class="unit">sin precio disponible en '+PLABEL[perP]+' (la serie de precios arranca en 2016)</div>';
       }
+      wrap.appendChild(tileSaldoProducto);
     }
-    wrap.appendChild(tileSaldoProducto);
+
+    // #tiles tiene 5 columnas en escritorio SOLO cuando la tarjeta de Saldo
+    // producto está presente -- si no, vuelve a la grilla de 4 columnas de
+    // siempre (ver ".tiles-5" en styles.css). Mobile no se ve afectado: sus
+    // media queries ya fuerzan 2 columnas sin importar la cantidad de tiles.
+    wrap.classList.toggle('tiles-5', act.saldo_producto_disponible);
   }
 
   // Evolución admite dos modos (ver toggle #evolModeSeg en el HTML):
@@ -898,18 +903,22 @@
       segBtns.forEach(b=>b.classList.toggle('active', b.dataset.cur==='total'));
     }
 
-    // Mismo criterio que arriba, para el toggle de Evolución: si la
-    // actividad no tiene saldo producto, el botón queda deshabilitado y,
-    // si estaba elegido, se vuelve a "saldo" (nunca se queda mostrando un
-    // gráfico vacío sin explicar por qué).
-    const evolBtns = document.getElementById('evolModeSeg').querySelectorAll('button');
-    evolBtns.forEach(b=>{
-      b.disabled = b.dataset.evolmode==='saldoproducto' && !act.saldo_producto_disponible;
-    });
-    if(!act.saldo_producto_disponible && state.evolMode==='saldoproducto'){
+    // Toggle de Evolución ("Saldo" / "Saldo producto"): si la actividad no
+    // tiene saldo producto, el toggle entero desaparece (pedido explícito
+    // de Ciro, Oct-2026 -- antes el botón quedaba deshabilitado y visible;
+    // ahora, para esas 7 actividades, no debe quedar ni rastro de "saldo
+    // producto" en la vista) y el gráfico de Evolución vuelve a mostrarse
+    // siempre en modo "Saldo" normal, sin ningún selector arriba -- igual
+    // que se veía antes de que existiera saldo producto.
+    const evolToolbar = document.querySelector('#saldos-evolucion .toolbar');
+    if(!act.saldo_producto_disponible){
+      if(evolToolbar) evolToolbar.style.display = 'none';
       state.evolMode = 'saldo';
+    } else {
+      if(evolToolbar) evolToolbar.style.display = '';
+      const evolBtns = document.getElementById('evolModeSeg').querySelectorAll('button[data-evolmode]');
+      evolBtns.forEach(b=>b.classList.toggle('active', b.dataset.evolmode===state.evolMode));
     }
-    evolBtns.forEach(b=>b.classList.toggle('active', b.dataset.evolmode===state.evolMode));
 
     renderTiles(act);
     renderChart(act);
@@ -1108,14 +1117,11 @@
     // por IPC, sin cambios) -- pedido explícito de Ciro de no reemplazarla.
     // Mismo criterio de "trimestre actual" que el resto de las tarjetas:
     // el extremo derecho del slider. Solo existe para las 14 actividades
-    // con saldo producto; para las otras 7 se explica el motivo, igual que
-    // en la tarjeta de Saldo producto de Saldos.
-    const tileTasaProducto = document.createElement('div'); tileTasaProducto.className='tile';
-    if(!act.saldo_producto_disponible){
-      tileTasaProducto.innerHTML = '<div class="label">Tasa producto</div>'
-        + '<div class="value mono">—</div>'
-        + '<div class="unit">'+(act.saldo_producto_motivo||'no disponible para esta actividad')+'</div>';
-    } else {
+    // con saldo producto; para las otras 7 la tarjeta directamente NO se
+    // muestra (pedido explícito de Ciro, Oct-2026 -- ver mismo comentario
+    // en renderTiles()/Saldos, idéntico criterio acá).
+    if(act.saldo_producto_disponible){
+      const tileTasaProducto = document.createElement('div'); tileTasaProducto.className='tile';
       const monedaLbl = act.saldo_producto_moneda==='usd' ? 'dólares' : 'pesos';
       const nominal = cur ? (act.saldo_producto_moneda==='usd' ? cur.dolares : cur.pesos) : null;
       const variacion = cur ? cur.variacion_producto : null;
@@ -1132,8 +1138,12 @@
           + '<div class="value mono">—</div>'
           + '<div class="unit">sin variación interanual de precio disponible en '+PLABEL[per]+' (la serie de precios arranca en 2016)</div>';
       }
+      wrap.appendChild(tileTasaProducto);
     }
-    wrap.appendChild(tileTasaProducto);
+
+    // Mismo criterio de grilla 4/5 columnas que #tiles en Saldos (ver
+    // styles.css, ".tiles-5").
+    wrap.classList.toggle('tiles-5', act.saldo_producto_disponible);
   }
 
   function renderTasasView(){
@@ -1172,27 +1182,29 @@
       noteEl.style.display = 'none';
     }
 
-    // Aviso de "Tasa producto": distingue el motivo (igual criterio que la
-    // tarjeta) de simplemente faltar la variación interanual en algunos
-    // trimestres puntuales (en vez de a toda la actividad). Si la actividad
-    // no tiene saldo producto, el gráfico de "Tasa producto" NO se
-    // renderiza (antes se renderizaba igual, mostrando solo la barra de
-    // tasa nominal con una leyenda rota -- "Variación interanual del
-    // precio (null)", porque act.saldo_producto_fuente es null para estas
-    // 7 actividades -- bug encontrado en revisión adversarial, Oct-2026).
-    // En vez de un gráfico a medias, se oculta el panel entero y el aviso
-    // de arriba explica el motivo (igual criterio que la tarjeta de
-    // Panorama, que ya mostraba el motivo en vez de un "—" ciego).
+    // Sección "Tasa producto" entera (título, texto, gráfico y su propio
+    // ítem en el menú de navegación de la pestaña): si la actividad no
+    // tiene saldo producto, no aparece NADA de esto -- ni la tarjeta (ver
+    // renderTasaTiles), ni esta sección, ni su link de navegación (pedido
+    // explícito de Ciro, Oct-2026). Antes la sección se mostraba igual con
+    // un aviso explicando el motivo; ahora, para esas 7 actividades, se
+    // oculta por completo, como si "tasa producto" no existiera para esa
+    // actividad. El aviso de "faltan algunos trimestres sueltos" se
+    // conserva tal cual para las 14 actividades que SÍ tienen tasa
+    // producto pero les falta la variación interanual en algún trimestre
+    // puntual (ej.: 2016, antes de que arranque la serie de precios) --
+    // eso es un caso distinto, de dato parcial, no de "no disponible".
+    const seccionTP = document.getElementById('tasas-producto');
+    const navLinkTP = document.querySelector('#tasasNav a[href="#tasas-producto"]');
     const noteElTP = document.getElementById('partialNoteTasaProducto');
     const noteTextTP = document.getElementById('partialNoteTasaProductoText');
-    const panelTP = document.querySelector('#tasas-producto .panel');
     if(!act.saldo_producto_disponible){
-      noteTextTP.innerHTML = 'Esta actividad no tiene tasa producto: '+(act.saldo_producto_motivo||'no disponible para esta actividad')+'.';
-      noteElTP.style.display = 'flex';
-      if(panelTP) panelTP.style.display = 'none';
+      if(seccionTP) seccionTP.style.display = 'none';
+      if(navLinkTP) navLinkTP.style.display = 'none';
       if(tasaProductoChart){ tasaProductoChart.destroy(); tasaProductoChart = null; }
     } else {
-      if(panelTP) panelTP.style.display = '';
+      if(seccionTP) seccionTP.style.display = '';
+      if(navLinkTP) navLinkTP.style.display = '';
       const sinVariacion = act.tasas.filter(t=>t.variacion_producto===null).length;
       if(sinVariacion>0){
         noteTextTP.innerHTML = 'A esta actividad le falta la variación interanual del precio en '+sinVariacion+' de '+act.tasas.length+' trimestres (la serie de precios arranca en 2016, así que ese primer año queda sin dato interanual); esos períodos se omiten del gráfico.';
