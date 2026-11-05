@@ -109,6 +109,15 @@
   .sbrow .dot{
     width:5px; height:5px; border-radius:50%; background:var(--warn-text); opacity:.85; margin-top:5px; flex-shrink:0;
   }
+  /* Punto distinto (no ámbar) para marcar actividades donde el BCRA agrupa
+     más de un rubro real bajo una sola categoría -- no es "datos
+     parciales", es otra cosa, así que necesita su propio color. Reusa el
+     matiz "industria" de la paleta categórica (ya validado por la skill de
+     dataviz), que no se usa en ningún otro lado del sidebar. El detalle de
+     qué agrupa va en el tooltip del ícono "ⓘ" que lo acompaña, no en este
+     punto (ver ACTIVIDAD_COMPOSICION en app.js). */
+  .sbrow .dot.agg{ background:var(--sector-industria); }
+  .sbrow .seg-item{ margin-top:1px; }
   /* "Total Agro": fija arriba de la lista alfabética del sidebar, separada
      con un divisor para que se lea como algo distinto de las 21 actividades
      de abajo (no es una más de ellas, es el agregado de todas). */
