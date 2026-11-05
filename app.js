@@ -289,9 +289,15 @@
       const b = document.createElement('button');
       b.className = 'sbrow' + (a.id===state.actId ? ' active':'');
       const limitada = !a.saldos_moneda_completo || !a.tasas_completo;
-      b.innerHTML = '<span>'+a.nombre+'</span>' + (limitada ? '<span class="dot" title="Datos parciales: ver aviso en la vista"></span>' : '');
-      b.addEventListener('click', ()=>{ state.actId=a.id; onClick(); });
+      const composicion = ACTIVIDAD_COMPOSICION[a.id];
+      b.innerHTML = '<span>'+a.nombre+'</span>'
+        + (limitada ? '<span class="dot" title="Datos parciales: ver aviso en la vista"></span>' : '')
+        + (composicion ? '<span class="dot agg" title="Actividad agregada por el BCRA"></span>'
+          + '<span class="seg-item"><span class="info-icon-btn" tabindex="0" aria-label="¿Qué incluye esta actividad?">ⓘ</span>'
+          + '<div class="seg-tooltip" role="tooltip"><b>¿Qué incluye esta actividad?</b>'+composicion+'</div></span>' : '');
+      b.addEventListener('click', (e)=>{ if(e.target.closest('.seg-item')) return; state.actId=a.id; onClick(); });
       container.appendChild(b);
+      if(composicion) wireInfoTooltip(b.querySelector('.seg-item'));
     });
   }
 
@@ -414,11 +420,18 @@
   // de duplicarla una tercera vez. `wrapSelector` tiene que resolver a un
   // elemento con class="seg-item" que contenga el trigger (botón o ícono)
   // y, como hijo, el <div class="seg-tooltip">.
-  function initInfoTooltip(wrapSelector, html){
-    const wrap = document.querySelector(wrapSelector);
+  // `wireInfoTooltip(wrap, html)` hace el trabajo real sobre un elemento ya
+  // resuelto (wrap = el .seg-item que contiene el trigger y, como hijo, el
+  // <div class="seg-tooltip">). `initInfoTooltip(selector, html)` es el modo
+  // de uso original (un único elemento estático, resuelto por selector) --
+  // se mantiene igual para no tocar los 2 usos que ya había. La versión por
+  // elemento permite además wirear tooltips en filas creadas dinámicamente
+  // (ver ACTIVIDAD_COMPOSICION / renderPills más abajo, Nov-2026), donde no
+  // hay un selector único fijo sino uno por fila.
+  function wireInfoTooltip(wrap, html){
     const tip = wrap && wrap.querySelector('.seg-tooltip');
     if(!wrap || !tip) return;
-    tip.innerHTML = html;
+    if(html!=null) tip.innerHTML = html;
 
     function positionTooltip(){
       const wrapRect = wrap.getBoundingClientRect();
@@ -443,17 +456,39 @@
     wrap.addEventListener('mouseleave', ()=>{ if(!touchLock) hide(0); });
     wrap.addEventListener('focusin', ()=>{ if(!touchLock) show(); });
     wrap.addEventListener('focusout', ()=>{ if(!touchLock) hide(0); });
-    wrap.addEventListener('touchstart', ()=>{
+    wrap.addEventListener('touchstart', (e)=>{
+      e.stopPropagation();
       touchLock = true;
       show();
       hide(3500);
       setTimeout(()=>{ touchLock = false; }, 700);
     }, {passive:true});
   }
+  function initInfoTooltip(wrapSelector, html){
+    wireInfoTooltip(document.querySelector(wrapSelector), html);
+  }
   initInfoTooltip('#evolModeSeg .seg-item',
     '<b>¿Qué es "Saldo producto"?</b>Convierte el saldo de crédito en la cantidad física equivalente del producto de esta actividad (toneladas, litros, kg o cajas, según corresponda), dividiendo el saldo por el precio de ese producto en el mismo trimestre.');
   initInfoTooltip('#tasas-producto .seg-item',
     '<b>¿Qué es "Tasa producto"?</b>Es la diferencia, en puntos porcentuales, entre cuánto subió la tasa de financiamiento de esta actividad y cuánto subió el precio de su propio producto en los últimos 12 meses. Positivo (rojo): creció más la tasa. Negativo (verde): creció más el precio.');
+
+  // Nota metodológica puntual para actividades donde el BCRA agrupa, bajo
+  // una sola categoría, más de un rubro real (pedido de Ciro, Nov-2026, a
+  // raíz de una consulta recibida: "hay que explicar qué es el dato que
+  // están viendo"). Mismo estilo exacto que "Pesos constantes" / "Saldo
+  // producto" / "Tasa producto" (misma clase .seg-item/.seg-tooltip, mismo
+  // ícono "ⓘ"), aplicado acá solo a las actividades cuyo propio nombre
+  // completo (ver DATA.actividades) ya deja ver que son una agregación
+  // explícita. No se incluyen TODAS las actividades con alguna salvedad
+  // (p.ej. las "excepto ...") -- solo las que agrupan rubros distintos bajo
+  // un mismo número.
+  const ACTIVIDAD_COMPOSICION = {
+    'tabaco': 'El BCRA agrupa en esta categoría el cultivo de tabaco junto con la elaboración de productos de tabaco (cigarrillos, etc.).',
+    'madera': 'Agrupa la silvicultura y extracción de madera junto con la industria maderera (aserraderos, fabricación de productos de madera).',
+    'otros-pecuarios': 'Incluye cría de equinos, caprinos, animales en cabañas y haras, producción de lana y pelos, y otras producciones pecuarias menores. No incluye bovino, ovino, porcino ni producción de leche, que tienen tarjeta propia.',
+    'produccion-y-procesamiento-de-': 'Agrupa el procesamiento industrial de carnes, pescado, frutas, legumbres y hortalizas, junto con la elaboración de aceites y grasas.',
+    'elaboracion-de-productos-de-mo': 'Agrupa la elaboración de productos de molinería (harinas, almidones y derivados) junto con la fabricación de alimentos balanceados para animales.',
+  };
 
   document.getElementById('tasaProvCurSeg').addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-cur]');
