@@ -303,6 +303,17 @@
     [...document.getElementById('tabsNav').children].forEach(c=>c.classList.toggle('active', c===btn));
     document.getElementById('view-saldos').style.display = state.tab==='saldos' ? '' : 'none';
     document.getElementById('view-tasas').style.display = state.tab==='tasas' ? '' : 'none';
+    document.getElementById('view-comercial').style.display = state.tab==='comercial' ? '' : 'none';
+    // "Financiamiento" es nacional (no por actividad), así que no necesita el
+    // panel de actividades de la izquierda -- se lo esconde con la misma
+    // clase que ya usa el resto del layout para un main sin sidebar.
+    document.getElementById('mainGrid').classList.toggle('no-sidebar', state.tab==='comercial');
+    // El pie de página de Saldos/Tasas dice "Fuente: ... BCRA" -- no aplica
+    // a Financiamiento (fuente distinta, Bolsa de Comercio de Rosario, con
+    // su propio rango de campañas), así que se cambia el pie entero en vez
+    // de dejar ese texto fijo colgando debajo de datos de otra fuente.
+    document.getElementById('mainFooter').style.display = state.tab==='comercial' ? 'none' : '';
+    document.getElementById('comercialFooter').style.display = state.tab==='comercial' ? '' : 'none';
     moveRangeSlider();
     renderAll();
   });
@@ -1931,17 +1942,324 @@
   }
   initNarrativeNav('saldosNav', 'saldos');
   initNarrativeNav('tasasNav', 'tasas');
+  initNarrativeNav('comercialNav', 'comercial');
+
+  // ============================================================
+  // Pestaña "Financiamiento" (antes "Crédito comercial"): de dónde salió
+  // la plata para sembrar cada campaña -- capital propio vs. terceros, y
+  // dentro de terceros, bancos+MAV vs. crédito comercial. Fuente: Bolsa de
+  // Comercio de Rosario, Informativo Semanal, una nota por campaña (no es
+  // un registro del BCRA como Saldos/Tasas: son estimaciones del sector,
+  // via encuestas). No depende de DATA/dashboard_data.json -- es una serie
+  // chica (5 campañas) que no amerita su propio pipeline de build_data.py,
+  // así que vive acá como constante, ya verificada contra las 5 notas
+  // originales (porcentajes exactamente como los reporta cada nota; los
+  // montos en US$ se derivan multiplicando el total de cada campaña por
+  // esos porcentajes, no se copian los sub-totales de cada nota, que
+  // a veces difieren del propio informe por redondeo propio de +/-1%).
+  function initFinanciamientoTab(){
+    var YEARS = ['2021/22','2022/23','2023/24','2024/25','2025/26'];
+
+    // total: inversión directa en siembra de los 6 cultivos (US$ M, tal
+    // cual la nota de cada campaña). capitalPct: % financiado con capital
+    // propio. bancmavPct/comercialPct: reparto DENTRO de terceros entre
+    // bancos+MAV y crédito comercial. instSubtotalPct: % de terceros que
+    // representa la lista de "instrumentos" de esa campaña -- en 2021/22 a
+    // 2023/24 la nota reporta bancos y MAV por separado con su propio
+    // desglose de instrumentos cada uno, así que acá se usa SOLO el de
+    // bancos (no el combinado) para no inventar una mezcla que la fuente
+    // nunca hizo; desde 2024/25 la propia Bolsa ya fusionó bancos+MAV en
+    // una sola categoría con un único desglose, así que ahí coincide con
+    // bancmavPct.
+    var nivel1 = [
+      {total:13367, capitalPct:30, bancmavPct:26, comercialPct:74, instSubtotalPct:20}, // 2021/22
+      {total:16456, capitalPct:30, bancmavPct:27, comercialPct:72, instSubtotalPct:21}, // 2022/23
+      {total:15024, capitalPct:25, bancmavPct:33, comercialPct:67, instSubtotalPct:23}, // 2023/24
+      {total:13821, capitalPct:30, bancmavPct:34.4, comercialPct:65.6, instSubtotalPct:34.4}, // 2024/25
+      {total:14747, capitalPct:30, bancmavPct:44.65, comercialPct:55.35, instSubtotalPct:44.65}  // 2025/26
+    ];
+    // Nota 2024/25: la bajada de la nota dice "66% comercial, 36% bancos y
+    // MAV" (no suma 100). El cuerpo de la propia nota, la tabla de la
+    // pág. 2 y la suma de los instrumentos bancarios (219+433+218+682+542+
+    // 209+251+771 = US$3.325 M) coinciden en que bancos+MAV fue US$3.325 M
+    // y comercial US$6.350 M sobre terceros = US$9.675 M -- eso da 34,4% y
+    // 65,6%, no el 36%/66% redondeado de la bajada; se usan los primeros.
+    // 2025/26: ídem, se usan los % exactos de la tabla resumen de la nota
+    // (pág. 7: US$4.609 M y US$5.713 M sobre terceros = US$10.323 M) en vez
+    // de los "45%"/"55%" redondeados del copete, para que el US$ de cada
+    // campaña coincida con el de su propia tabla.
+
+    // Dentro de crédito comercial: corredores/acopios/cooperativas,
+    // proveedores de insumos (traders/exportadores) y mutuales. Muy
+    // estable entre campañas (en 2022/23 hay además un 0,4% vía SGR que
+    // la propia nota aclara que es para evitar doble conteo con bancos/MAV,
+    // no un cuarto canal -- no se grafica aparte).
+    var nivel2Pct = {
+      corredores:  [68, 55, 55, 55, 55],
+      proveedores: [27, 40, 40, 40, 40],
+      mutuales:    [5, 5, 5, 5, 5]
+    };
+
+    var instrumentColors = {
+      'Descuento de valores':                 '#1F6B3A',
+      'Descuento de cheques y pagarés':       '#1F6B3A',
+      'Préstamos bullet':                     '#2E86AB',
+      'Tarjeta agro':                         '#B9822A',
+      'Préstamos hipotecarios y prendarios':  '#8E44AD',
+      'Acuerdos en cuenta corriente':         '#C0572A',
+      'Forwards cedidos':                     '#17A398',
+      'Préstamos con convenio para compra de insumos': '#D4A373',
+      'Otras líneas':                         '#5C6B65',
+      'Otras líneas y MAV':                   '#5C6B65'
+    };
+
+    // % dentro del crédito bancario (2021/22-2023/24) o bancos+MAV
+    // combinado (2024/25-2025/26, ya fusionado por la propia Bolsa), tal
+    // cual cada nota. Verificado contra el texto y, para 2023/24-2025/26,
+    // también contra las tablas/infografías de cada informe.
+    var instrumentos = [
+      [ // 2021/22 -- solo bancos (el MAV se reportó aparte ese año)
+        {label:'Tarjeta agro', pct:39},
+        {label:'Otras líneas', pct:36},
+        {label:'Descuento de valores', pct:18},
+        {label:'Forwards cedidos', pct:7}
+      ],
+      [ // 2022/23 -- solo bancos
+        {label:'Otras líneas', pct:49},
+        {label:'Tarjeta agro', pct:33},
+        {label:'Forwards cedidos', pct:9},
+        {label:'Descuento de valores', pct:9}
+      ],
+      [ // 2023/24 -- solo bancos
+        {label:'Descuento de cheques y pagarés', pct:31.8},
+        {label:'Préstamos bullet', pct:27.4},
+        {label:'Tarjeta agro', pct:12.4},
+        {label:'Préstamos hipotecarios y prendarios', pct:10.7},
+        {label:'Otras líneas', pct:9.3},
+        {label:'Acuerdos en cuenta corriente', pct:5.4},
+        {label:'Forwards cedidos', pct:3.0}
+      ],
+      [ // 2024/25 -- bancos + MAV combinado (ya fusionado por la Bolsa)
+        {label:'Otras líneas y MAV', pct:23.2},
+        {label:'Préstamos bullet', pct:20.5},
+        {label:'Préstamos hipotecarios y prendarios', pct:16.3},
+        {label:'Descuento de cheques y pagarés', pct:13.0},
+        {label:'Préstamos con convenio para compra de insumos', pct:7.5},
+        {label:'Tarjeta agro', pct:6.6},
+        {label:'Forwards cedidos', pct:6.6},
+        {label:'Acuerdos en cuenta corriente', pct:6.3}
+      ],
+      [ // 2025/26 -- bancos + MAV combinado
+        {label:'Préstamos bullet', pct:24.2},
+        {label:'Préstamos hipotecarios y prendarios', pct:20.1},
+        {label:'Descuento de cheques y pagarés', pct:14.7},
+        {label:'Préstamos con convenio para compra de insumos', pct:14.5},
+        {label:'Otras líneas y MAV', pct:12.4},
+        {label:'Tarjeta agro', pct:7.5},
+        {label:'Acuerdos en cuenta corriente', pct:6.6}
+      ]
+    ];
+
+    function fmtUSD(v){ return Math.round(v).toLocaleString('es-AR') + ' M'; }
+    function fmtPct(v){ return (Math.round(v*10)/10).toString().replace('.0','') + '%'; }
+    function round1(v){ return Math.round(v*10)/10; }
+
+    function capitalUSD(i){ return nivel1[i].total * nivel1[i].capitalPct / 100; }
+    function tercerosUSD(i){ return nivel1[i].total - capitalUSD(i); }
+    function bancmavUSD(i){ return tercerosUSD(i) * nivel1[i].bancmavPct / 100; }
+    function comercialUSD(i){ return tercerosUSD(i) * nivel1[i].comercialPct / 100; }
+    function instSubtotalUSD(i){ return tercerosUSD(i) * nivel1[i].instSubtotalPct / 100; }
+
+    // ---- Tiles (última campaña) ----
+    (function renderTiles(){
+      var i = YEARS.length - 1;
+      var tilesEl = document.getElementById('ccTiles');
+      if(!tilesEl) return;
+      var bancmavPctTotal = nivel1[i].bancmavPct * tercerosUSD(i) / nivel1[i].total;
+      var comercialPctTotal = nivel1[i].comercialPct * tercerosUSD(i) / nivel1[i].total;
+      var items = [
+        {label:'Inversión total · ' + YEARS[i], value: 'US$ ' + fmtUSD(nivel1[i].total), unit:'sobre el total a financiar'},
+        {label:'Capital propio', value: fmtPct(nivel1[i].capitalPct), unit: 'US$ ' + fmtUSD(capitalUSD(i))},
+        {label:'Bancos + MAV', value: fmtPct(bancmavPctTotal), unit: 'US$ ' + fmtUSD(bancmavUSD(i))},
+        {label:'Crédito comercial', value: fmtPct(comercialPctTotal), unit: 'US$ ' + fmtUSD(comercialUSD(i))}
+      ];
+      tilesEl.innerHTML = items.map(function(it){
+        return '<div class="tile"><div class="label">' + it.label + '</div>' +
+          '<div class="value">' + it.value + '</div>' +
+          '<div class="unit">' + it.unit + '</div></div>';
+      }).join('');
+    })();
+
+    // ---- Chart 1: Panorama ----
+    var panoramaColors = {capital:'#AFCBB6', bancmav:'#B9822A', comercial:'#1F6B3A'};
+    var panoramaLabels = {capital:'Capital propio', bancmav:'Bancos + MAV', comercial:'Crédito comercial'};
+    var panoramaLegendEl = document.getElementById('panoramaLegend');
+    if(panoramaLegendEl){
+      panoramaLegendEl.innerHTML = Object.keys(panoramaLabels).map(function(k){
+        return '<span><i style="background:' + panoramaColors[k] + '"></i>' + panoramaLabels[k] + '</span>';
+      }).join('');
+    }
+    var panoramaCanvas = document.getElementById('panoramaChart');
+    if(panoramaCanvas){
+      var panoramaChart = new Chart(panoramaCanvas, {
+        type: 'bar',
+        data: { labels: YEARS, datasets: [
+          {label: panoramaLabels.capital, backgroundColor: panoramaColors.capital, data: []},
+          {label: panoramaLabels.bancmav, backgroundColor: panoramaColors.bancmav, data: []},
+          {label: panoramaLabels.comercial, backgroundColor: panoramaColors.comercial, data: []}
+        ]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
+            return ctx.dataset.label + ': ' + ctx.formattedValue + (ctx.chart.$mode==='usd' ? ' M' : '%');
+          } } } },
+          scales: {
+            x: { stacked:true, grid:{display:false}, ticks:{color:'#5C6B65', font:{size:11.5, weight:600}} },
+            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}} }
+          }
+        }
+      });
+      function renderPanorama(mode){
+        panoramaChart.$mode = mode;
+        var d = panoramaChart.data.datasets;
+        if(mode==='pct'){
+          d[0].data = YEARS.map(function(_,i){ return round1(nivel1[i].capitalPct); });
+          d[1].data = YEARS.map(function(_,i){ return round1(nivel1[i].bancmavPct * tercerosUSD(i) / nivel1[i].total); });
+          d[2].data = YEARS.map(function(_,i){ return round1(nivel1[i].comercialPct * tercerosUSD(i) / nivel1[i].total); });
+          panoramaChart.options.scales.y.max = 100;
+        } else {
+          d[0].data = YEARS.map(function(_,i){ return Math.round(capitalUSD(i)); });
+          d[1].data = YEARS.map(function(_,i){ return Math.round(bancmavUSD(i)); });
+          d[2].data = YEARS.map(function(_,i){ return Math.round(comercialUSD(i)); });
+          panoramaChart.options.scales.y.max = undefined;
+        }
+        panoramaChart.update();
+      }
+      renderPanorama('pct');
+      var panoramaSegEl = document.getElementById('panoramaSeg');
+      if(panoramaSegEl) panoramaSegEl.addEventListener('click', function(e){
+        var btn = e.target.closest('button'); if(!btn) return;
+        this.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        renderPanorama(btn.dataset.mode);
+      });
+    }
+
+    // ---- Chart 2: Canales comerciales ----
+    var canalesColors = {corredores:'#1F6B3A', proveedores:'#B9822A', mutuales:'#C9A66B'};
+    var canalesLabels = {corredores:'Corredores, acopios y cooperativas', proveedores:'Proveedores de insumos y exportadores', mutuales:'Mutuales'};
+    var canalesLegendEl = document.getElementById('canalesLegend');
+    if(canalesLegendEl){
+      canalesLegendEl.innerHTML = Object.keys(canalesLabels).map(function(k){
+        return '<span><i style="background:' + canalesColors[k] + '"></i>' + canalesLabels[k] + '</span>';
+      }).join('');
+    }
+    var canalesCanvas = document.getElementById('canalesChart');
+    if(canalesCanvas){
+      var canalesChart = new Chart(canalesCanvas, {
+        type: 'bar',
+        data: { labels: YEARS, datasets: [
+          {label: canalesLabels.corredores, backgroundColor: canalesColors.corredores, data: []},
+          {label: canalesLabels.proveedores, backgroundColor: canalesColors.proveedores, data: []},
+          {label: canalesLabels.mutuales, backgroundColor: canalesColors.mutuales, data: []}
+        ]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
+            return ctx.dataset.label + ': ' + ctx.formattedValue + (ctx.chart.$mode==='usd' ? ' M' : '%');
+          } } } },
+          scales: {
+            x: { stacked:true, grid:{display:false}, ticks:{color:'#5C6B65', font:{size:11.5, weight:600}} },
+            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}} }
+          }
+        }
+      });
+      function renderCanales(mode){
+        canalesChart.$mode = mode;
+        var d = canalesChart.data.datasets;
+        if(mode==='pct'){
+          d[0].data = nivel2Pct.corredores.slice();
+          d[1].data = nivel2Pct.proveedores.slice();
+          d[2].data = nivel2Pct.mutuales.slice();
+          canalesChart.options.scales.y.max = 100;
+        } else {
+          d[0].data = YEARS.map(function(_,i){ return Math.round(comercialUSD(i) * nivel2Pct.corredores[i] / 100); });
+          d[1].data = YEARS.map(function(_,i){ return Math.round(comercialUSD(i) * nivel2Pct.proveedores[i] / 100); });
+          d[2].data = YEARS.map(function(_,i){ return Math.round(comercialUSD(i) * nivel2Pct.mutuales[i] / 100); });
+          canalesChart.options.scales.y.max = undefined;
+        }
+        canalesChart.update();
+      }
+      renderCanales('pct');
+      var canalesSegEl = document.getElementById('canalesSeg');
+      if(canalesSegEl) canalesSegEl.addEventListener('click', function(e){
+        var btn = e.target.closest('button'); if(!btn) return;
+        this.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        renderCanales(btn.dataset.mode);
+      });
+    }
+
+    // ---- Chart 3: Instrumentos bancarios (por campaña, no comparable) ----
+    var instYearSeg = document.getElementById('instYearSeg');
+    var instChartCanvas = document.getElementById('instChart');
+    if(instYearSeg && instChartCanvas){
+      instYearSeg.innerHTML = YEARS.map(function(y,i){
+        return '<button data-i="' + i + '"' + (i===YEARS.length-1 ? ' class="active"' : '') + '>' + y + '</button>';
+      }).join('');
+      var instChart = new Chart(instChartCanvas, {
+        type: 'doughnut',
+        data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor:'#FFFFFF', borderWidth:2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return ctx.label + ': ' + ctx.formattedValue + '%'; } } } }
+        }
+      });
+      function renderInstrumentos(yearIndex){
+        var list = instrumentos[yearIndex].slice().sort(function(a,b){ return b.pct - a.pct; });
+        var subtotal = instSubtotalUSD(yearIndex);
+        instChart.data.labels = list.map(function(it){ return it.label; });
+        instChart.data.datasets[0].data = list.map(function(it){ return it.pct; });
+        instChart.data.datasets[0].backgroundColor = list.map(function(it){ return instrumentColors[it.label] || '#8A9A95'; });
+        instChart.update();
+        var instLegendEl = document.getElementById('instLegend');
+        if(instLegendEl) instLegendEl.innerHTML = list.map(function(it){
+          return '<span><i style="background:' + (instrumentColors[it.label]||'#8A9A95') + '"></i>' + it.label + '</span>';
+        }).join('');
+        var instBodyEl = document.getElementById('instBody');
+        if(instBodyEl) instBodyEl.innerHTML = list.map(function(it){
+          var usd = subtotal * it.pct / 100;
+          return '<tr><td><span class="swatch" style="background:' + (instrumentColors[it.label]||'#8A9A95') + '"></span></td>' +
+            '<td class="prov">' + it.label + '</td>' +
+            '<td class="num">' + it.pct + '%</td>' +
+            '<td class="num sharecol">US$ ' + fmtUSD(usd) + '</td></tr>';
+        }).join('');
+      }
+      renderInstrumentos(YEARS.length - 1);
+      instYearSeg.addEventListener('click', function(e){
+        var btn = e.target.closest('button'); if(!btn) return;
+        this.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        renderInstrumentos(parseInt(btn.dataset.i, 10));
+      });
+    }
+  }
+  initFinanciamientoTab();
 
   function syncPills(){
     renderPills(document.getElementById('actSidebar'), pillClicked);
   }
   function pillClicked(){
     syncPills();
-    if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
+    if(state.tab==='saldos') renderSaldosView();
+    else if(state.tab==='tasas') renderTasasView();
   }
   function renderAll(){
     syncPills();
-    if(state.tab==='saldos') renderSaldosView(); else renderTasasView();
+    if(state.tab==='saldos') renderSaldosView();
+    else if(state.tab==='tasas') renderTasasView();
+    // "comercial" no depende de la actividad/pestaña elegida: se arma una
+    // sola vez en initFinanciamientoTab() más abajo, no en cada renderAll().
   }
 
   const nActEl = document.getElementById('nActividadesResumen');
