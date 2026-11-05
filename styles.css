@@ -294,6 +294,10 @@
   }
   .barcell{position:relative; width:100%; height:6px; background:var(--bar-track); border-radius:99px; margin-top:6px; overflow:hidden;}
   .barcell i{position:absolute; inset:0; width:0%; background:var(--accent); border-radius:99px;}
+  /* Punto de color en la tabla de instrumentos (pestaña Financiamiento),
+     para que la fila se pueda relacionar con su porción en la torta sin
+     tener que repetir el nombre dos veces. */
+  .swatch{width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0;}
   .tablewrap{overflow-x:auto;}
   .sharecol{color:var(--text-faint); font-weight:500;}
 
