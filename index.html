@@ -25,6 +25,7 @@
 <nav class="tabs" id="tabsNav">
   <button data-tab="saldos" class="active">Saldos</button>
   <button data-tab="tasas">Tasas</button>
+  <button data-tab="comercial">Financiamiento</button>
 </nav>
 
 <main id="mainGrid">
@@ -346,11 +347,88 @@
     </section>
 
   </div>
+
+  <div id="view-comercial" style="display:none;">
+
+    <nav class="resumen-nav" id="comercialNav">
+      <a href="#cc-panorama" class="active">Panorama</a>
+      <a href="#cc-canales">Canales comerciales</a>
+      <a href="#cc-instrumentos">Instrumentos bancarios</a>
+    </nav>
+
+    <div class="partialnote" style="margin-bottom:28px;">
+      ⚠️ <div>A diferencia de Saldos y Tasas, estos datos son estimaciones de la Bolsa de Comercio de Rosario (no un registro oficial del BCRA).</div>
+    </div>
+
+    <section class="resumen-section" id="cc-panorama">
+      <div class="resumen-eyebrow">Panorama</div>
+      <h2>¿De dónde salió la plata para sembrar?</h2>
+      <div class="resumen-lede">Qué parte de la inversión en siembra pusieron los productores y qué parte vino de terceros: bancos + MAV o crédito comercial.</div>
+
+      <div class="tiles" id="ccTiles"></div>
+
+      <div class="panel">
+        <div class="panelhead">
+          <div class="legend" id="panoramaLegend"></div>
+          <div class="segmented" id="panoramaSeg">
+            <button data-mode="pct" class="active">% del total</button>
+            <button data-mode="usd">US$ millones</button>
+          </div>
+        </div>
+        <div class="chartwrap"><canvas id="panoramaChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="cc-canales">
+      <div class="resumen-eyebrow">Canales comerciales</div>
+      <h2>Dentro del crédito comercial, ¿quién lo otorga?</h2>
+      <div class="resumen-lede">El crédito comercial, la fuente más grande, se reparte entre corredores/acopios, proveedores y mutuales.</div>
+
+      <div class="panel">
+        <div class="panelhead">
+          <div class="legend" id="canalesLegend"></div>
+          <div class="segmented" id="canalesSeg">
+            <button data-mode="pct" class="active">% del crédito comercial</button>
+            <button data-mode="usd">US$ millones</button>
+          </div>
+        </div>
+        <div class="chartwrap"><canvas id="canalesChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="cc-instrumentos">
+      <div class="resumen-eyebrow">Instrumentos bancarios</div>
+      <h2>¿Con qué instrumentos se armó el crédito bancario de cada campaña?</h2>
+      <div class="resumen-lede">Instrumentos del crédito bancario de cada campaña. Elegí un año: la lista de categorías cambió con el tiempo, así que no es una serie comparable.</div>
+
+      <div class="toolbar" style="margin-bottom:14px;">
+        <div class="segmented" id="instYearSeg"></div>
+      </div>
+
+      <div class="panel">
+        <div class="twocol">
+          <div>
+            <div class="legend" id="instLegend"></div>
+            <div class="chartwrap" style="height:280px;"><canvas id="instChart"></canvas></div>
+          </div>
+          <div class="tablewrap" style="margin-top:0;">
+            <table>
+              <thead><tr><th style="width:18px"></th><th>Instrumento</th><th class="num">%</th><th class="num">US$ M</th></tr></thead>
+              <tbody id="instBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
   </div>
 
 </main>
 
-<footer class="note">Fuente: entidades financieras informantes al BCRA · elaboración CONINAGRO · datos <span id="footerCoverage">—</span></footer>
+<footer class="note" id="mainFooter">Fuente: entidades financieras informantes al BCRA · elaboración CONINAGRO · datos <span id="footerCoverage">—</span></footer>
+<footer class="note" id="comercialFooter" style="display:none;">Fuente: Bolsa de Comercio de Rosario, Informativo Semanal (campañas 2021/22 a 2025/26) · elaboración CONINAGRO</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="app.js"></script>
