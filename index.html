@@ -42,6 +42,7 @@
       <a href="#saldos-participacion">Participación</a>
       <a href="#saldos-monedas">Monedas</a>
       <a href="#saldos-provincias">Provincias</a>
+      <a href="#saldos-internacional">Internacional</a>
       <a href="#saldos-composicion">Composición</a>
       <a href="#saldos-sectores">Sectores</a>
     </nav>
@@ -94,7 +95,6 @@
           <button data-evolmode="saldo" class="active">Saldo</button>
           <span class="seg-item">
             <button data-evolmode="saldoproducto">Saldo producto</button>
-            <span class="info-icon-btn" style="margin-left:6px" tabindex="0" aria-label="¿Qué es Saldo producto?">ⓘ</span>
             <div class="seg-tooltip" id="saldoProductoTooltip" role="tooltip"></div>
           </span>
         </div>
@@ -142,6 +142,24 @@
           </div>
         </div>
         <div class="provtooltip" id="provTooltip" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="resumen-section" id="saldos-internacional">
+      <div class="resumen-eyebrow">Internacional</div>
+      <h2>¿Cómo se compara la Argentina con otros países?</h2>
+      <div class="resumen-lede">Crédito bancario al agro como porcentaje del PBI (últimos 4 trimestres), Argentina contra Uruguay, México, Estados Unidos, Australia y Chile.</div>
+      <div class="panel">
+        <div class="legend" id="internacionalLegend"></div>
+        <div class="chartwrap"><canvas id="internacionalChart"></canvas></div>
+      </div>
+      <div class="panel" style="margin-top:14px;">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th style="width:18px"></th><th>País</th><th class="num">Crédito agro / PBI</th></tr></thead>
+            <tbody id="internacionalBody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
