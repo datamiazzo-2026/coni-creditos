@@ -207,6 +207,19 @@
   const rangeFill = document.getElementById('rangeFill');
   const rangeValueLabel = document.getElementById('rangeValueLabel');
 
+  // Segundo par de inputs, al pie del gráfico de Internacional (pedido de
+  // Ciro, Nov-2026: con 46 trimestres el eje X quedaba amontonado -- mejor
+  // un slider ahí mismo, como el de Panorama, para no tener que scrollear
+  // hasta arriba cada vez que se quiere acotar el período). NO es un rango
+  // independiente: lee y escribe el mismo state.rangeStart/rangeEnd de
+  // siempre, así que mover cualquiera de los dos sliders mueve el otro
+  // también (ver updateRangeUI) y afecta a todos los gráficos de Saldos,
+  // no solo a este.
+  const intlRangeMin = document.getElementById('internacionalRangeMin');
+  const intlRangeMax = document.getElementById('internacionalRangeMax');
+  const intlRangeFill = document.getElementById('internacionalRangeFill');
+  const intlRangeValueLabel = document.getElementById('internacionalRangeValueLabel');
+
   function updateRangeUI(){
     const a = state.rangeStart, b = state.rangeEnd;
     const lastIdx = PERIODOS.length-1;
@@ -215,6 +228,13 @@
     rangeFill.style.left = pctA+'%';
     rangeFill.style.right = (100-pctB)+'%';
     rangeValueLabel.textContent = PLABEL[PERIODOS[a]]+' — '+PLABEL[PERIODOS[b]];
+    if(intlRangeMin){
+      intlRangeMin.value = String(a);
+      intlRangeMax.value = String(b);
+      intlRangeFill.style.left = pctA+'%';
+      intlRangeFill.style.right = (100-pctB)+'%';
+      intlRangeValueLabel.textContent = PLABEL[PERIODOS[a]]+' — '+PLABEL[PERIODOS[b]];
+    }
   }
   if(PERIODOS.length>1){
     rangeMin.max = rangeMax.max = String(PERIODOS.length-1);
@@ -232,8 +252,29 @@
       state.rangeEnd = b;
       updateRangeUI(); renderAll();
     });
+    if(intlRangeMin){
+      intlRangeMin.max = intlRangeMax.max = String(PERIODOS.length-1);
+      intlRangeMin.value = String(state.rangeStart);
+      intlRangeMax.value = String(state.rangeEnd);
+      intlRangeMin.addEventListener('input', ()=>{
+        let a = Number(intlRangeMin.value);
+        if(a > state.rangeEnd){ a = state.rangeEnd; intlRangeMin.value = String(a); }
+        state.rangeStart = a;
+        rangeMin.value = String(a);
+        updateRangeUI(); renderAll();
+      });
+      intlRangeMax.addEventListener('input', ()=>{
+        let b = Number(intlRangeMax.value);
+        if(b < state.rangeStart){ b = state.rangeStart; intlRangeMax.value = String(b); }
+        state.rangeEnd = b;
+        rangeMax.value = String(b);
+        updateRangeUI(); renderAll();
+      });
+    }
   } else {
     document.querySelector('.rangepanel').style.display = 'none';
+    const intlBlock = document.getElementById('internacionalRangeBlock');
+    if(intlBlock) intlBlock.style.display = 'none';
   }
   updateRangeUI();
 
@@ -1856,39 +1897,40 @@
       },
     });
 
-    const legendEl = document.getElementById('internacionalLegend');
-    if(legendEl){
-      legendEl.innerHTML = intl.paises.map((pais,i)=>
-        '<span class="toggle" data-idx="'+i+'"><i style="background:'+internacionalColorFor(pais)+'"></i>'+pais.nombre+'</span>'
-      ).join('');
-      legendEl.querySelectorAll('.toggle').forEach(function(el){
-        el.onclick = function(){
-          const idx = Number(el.dataset.idx);
-          const visible = intlChart.isDatasetVisible(idx);
-          intlChart.setDatasetVisibility(idx, !visible);
-          intlChart.update();
-          el.classList.toggle('off', visible);
-        };
-      });
-    }
-
-    // Último valor de cada país (para la tabla debajo del gráfico): toma el
-    // extremo derecho de la VENTANA elegida (mismo criterio que el resto de
-    // las tarjetas "del período actual" en este archivo), no siempre el
-    // último trimestre de toda la serie.
+    // La tabla de la derecha hace de referencia/leyenda del gráfico (pedido
+    // de Ciro, Nov-2026: antes había una leyenda arriba Y una tabla aparte
+    // más abajo, "dos partes separadas" -- ahora es un solo panel, con el
+    // gráfico ocupando la columna ancha y la tabla la columna angosta de la
+    // derecha, mismo patrón .intlgrid que .provgrid en Provincias). Cada
+    // fila es clickeable y togglea la visibilidad de esa serie en el
+    // gráfico -- data-idx guarda la posición ORIGINAL dentro de
+    // intl.paises (el mismo orden que los datasets del chart), no la
+    // posición ya reordenada por valor que se ve en pantalla. El último
+    // valor de cada país toma el extremo derecho de la VENTANA elegida
+    // (mismo criterio que el resto de las tarjetas "del período actual" en
+    // este archivo), no siempre el último trimestre de toda la serie.
     const bodyEl = document.getElementById('internacionalBody');
     if(bodyEl){
-      const rows = intl.paises.map(pais=>{
+      const rows = intl.paises.map((pais, idx)=>{
         const data = (intl.series[pais.id] || []).slice(startIdx, endIdx+1);
         let lastVal = null;
         for(let i=data.length-1; i>=0; i--){ if(data[i]!=null){ lastVal = data[i]; break; } }
-        return { pais, lastVal };
+        return { pais, idx, lastVal };
       }).sort((a,b)=> (b.lastVal||0) - (a.lastVal||0));
       bodyEl.innerHTML = rows.map(r=>
-        '<tr><td><span class="swatch" style="background:'+internacionalColorFor(r.pais)+'"></span></td>'
+        '<tr data-idx="'+r.idx+'"><td><span class="swatch" style="background:'+internacionalColorFor(r.pais)+'"></span></td>'
         + '<td class="prov">'+r.pais.nombre+(r.pais.enfasis?' <span class="rank" style="width:auto;padding:0 6px;">AR</span>':'')+'</td>'
         + '<td class="num">'+(r.lastVal!=null ? fmtPct2.format(r.lastVal)+'%' : '—')+'</td></tr>'
       ).join('');
+      bodyEl.querySelectorAll('tr[data-idx]').forEach(function(tr){
+        tr.addEventListener('click', function(){
+          const idx = Number(tr.dataset.idx);
+          const visible = intlChart.isDatasetVisible(idx);
+          intlChart.setDatasetVisibility(idx, !visible);
+          intlChart.update();
+          tr.classList.toggle('off', visible);
+        });
+      });
     }
   }
 

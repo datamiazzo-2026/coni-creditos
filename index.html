@@ -150,15 +150,25 @@
       <h2>¿Cómo se compara la Argentina con otros países?</h2>
       <div class="resumen-lede">Crédito bancario al agro como porcentaje del PBI (últimos 4 trimestres), Argentina contra Uruguay, México, Estados Unidos, Australia y Chile.</div>
       <div class="panel">
-        <div class="legend" id="internacionalLegend"></div>
-        <div class="chartwrap"><canvas id="internacionalChart"></canvas></div>
-      </div>
-      <div class="panel" style="margin-top:14px;">
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th style="width:18px"></th><th>País</th><th class="num">Crédito agro / PBI</th></tr></thead>
-            <tbody id="internacionalBody"></tbody>
-          </table>
+        <div class="intlgrid">
+          <div class="chartwrap" style="height:320px;"><canvas id="internacionalChart"></canvas></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th style="width:18px"></th><th>País</th><th class="num">Crédito agro / PBI</th></tr></thead>
+              <tbody id="internacionalBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="internacionalRangeBlock">
+          <div class="rangehead" style="margin-top:18px;">
+            <div class="desc" style="margin-bottom:0;">Ventana de tiempo</div>
+            <div class="rangevalue mono" id="internacionalRangeValueLabel">—</div>
+          </div>
+          <div class="rangeslider" id="internacionalRangeSliderWrap">
+            <div class="rangetrack"><div class="rangefill" id="internacionalRangeFill"></div></div>
+            <input type="range" id="internacionalRangeMin" class="rangeinput" min="0" max="0" step="1" value="0">
+            <input type="range" id="internacionalRangeMax" class="rangeinput" min="0" max="0" step="1" value="0">
+          </div>
         </div>
       </div>
     </section>
