@@ -1,11 +1,18 @@
 (function(){
   async function boot(){
-    const [DATA, AR_MAP] = await Promise.all([
+    const [DATA, AR_MAP, INTL] = await Promise.all([
       fetch('data/dashboard_data.json').then(r=>r.json()),
-      fetch('data/ar_map.json').then(r=>r.json())
+      fetch('data/ar_map.json').then(r=>r.json()),
+      fetch('data/internacional.json').then(r=>r.json())
     ]);
 
-  
+
+  // data/internacional.json se cuelga directamente de DATA (en vez de
+  // quedar como variable aparte) para que el resto del archivo lo use igual
+  // que cualquier otro dato ya existente (DATA.internacional), sin tener
+  // que acordarse de pasar INTL como parámetro extra a cada función.
+  DATA.internacional = INTL;
+
   const PERIODOS = DATA.periodos;
   const PLABEL = DATA.periodos_label;
 
@@ -441,8 +448,19 @@
       const idealLeft = idealCenter - tipWidth/2;
       const maxLeft = window.innerWidth - tipWidth - pad;
       const clampedLeft = Math.max(pad, Math.min(idealLeft, Math.max(pad, maxLeft)));
-      tip.style.setProperty('--tooltip-left', (clampedLeft - wrapRect.left) + 'px');
-      tip.style.setProperty('--tooltip-transform', 'none');
+      // ".tile-tooltip" (tarjetas, ver tileSaldoProducto más abajo): position:fixed
+      // en vez de absolute, con left/top en coordenadas de viewport puestas acá
+      // mismo -- las tarjetas viven dentro de #tiles, que tiene overflow:hidden
+      // (para los bordes redondeados de la grilla) y recortaría un tooltip
+      // absolute antes de que llegue a verse. Con fixed no hace falta ningún
+      // padre position:relative, así que el calc(100%...) del CSS no aplica acá.
+      if(tip.classList.contains('tile-tooltip')){
+        tip.style.left = clampedLeft + 'px';
+        tip.style.top = (wrapRect.bottom + 9) + 'px';
+      } else {
+        tip.style.setProperty('--tooltip-left', (clampedLeft - wrapRect.left) + 'px');
+        tip.style.setProperty('--tooltip-transform', 'none');
+      }
       const arrowMin = 14, arrowMax = tipWidth - 14;
       const arrowLeft = Math.max(arrowMin, Math.min(idealCenter - clampedLeft, arrowMax));
       tip.style.setProperty('--arrow-left', arrowLeft + 'px');
@@ -768,17 +786,32 @@
     if(act.saldo_producto_disponible){
       const tileSaldoProducto = document.createElement('div');
       tileSaldoProducto.className='tile';
+      // Sin ícono "ⓘ" acá (a diferencia de Tasa producto / las notas de
+      // actividad): es una tarjeta entera, no un botón chico, así que no
+      // hace falta un marcador aparte -- igual que "Pesos constantes" y el
+      // toggle "Saldo producto" de Evolución, el cartel aparece al pasar
+      // el mouse (o tocar, en mobile) por toda la tarjeta. Mismo mecanismo
+      // .seg-tooltip/wireInfoTooltip de siempre (ver más abajo en este
+      // archivo), solo que acá el "wrap" es la tarjeta en vez de un
+      // .seg-item -- por eso position:relative/cursor:help van inline acá
+      // y no en .tile (el resto de las tarjetas no son hoverables).
+      tileSaldoProducto.style.position = 'relative';
+      tileSaldoProducto.style.cursor = 'help';
       const spVal = sActP ? sActP.saldo_producto : null;
+      const saldoProductoTooltipHtml = '<b>¿Qué es "Saldo producto"?</b>Convierte el saldo de crédito en la cantidad física equivalente del producto de esta actividad (toneladas, litros, kg o cajas, según corresponda), dividiendo el saldo por el precio de ese producto en el mismo trimestre.';
       if(spVal!=null){
         tileSaldoProducto.innerHTML = '<div class="label">Saldo producto · '+PLABEL[perP]+'</div>'
           + '<div class="value mono">'+fmtUnidadProducto(spVal, act.saldo_producto_unidad)+'</div>'
-          + '<div class="unit">'+act.saldo_producto_fuente+'</div>';
+          + '<div class="unit">'+act.saldo_producto_fuente+'</div>'
+          + '<div class="seg-tooltip tile-tooltip" role="tooltip"></div>';
       } else {
         tileSaldoProducto.innerHTML = '<div class="label">Saldo producto · '+PLABEL[perP]+'</div>'
           + '<div class="value mono">—</div>'
-          + '<div class="unit">sin precio disponible en '+PLABEL[perP]+' (la serie de precios arranca en 2016)</div>';
+          + '<div class="unit">sin precio disponible en '+PLABEL[perP]+' (la serie de precios arranca en 2016)</div>'
+          + '<div class="seg-tooltip tile-tooltip" role="tooltip"></div>';
       }
       wrap.appendChild(tileSaldoProducto);
+      wireInfoTooltip(tileSaldoProducto, saldoProductoTooltipHtml);
     }
 
     // #tiles tiene 5 columnas en escritorio SOLO cuando la tarjeta de Saldo
@@ -1146,6 +1179,23 @@
       if(seccionSectores) seccionSectores.style.display = 'none';
       if(navLinkSectores) navLinkSectores.style.display = 'none';
       if(sectoresChart){ sectoresChart.destroy(); sectoresChart = null; }
+    }
+
+    // Sección "Internacional" (comparación Crédito agro / PBI contra otros
+    // 5 países): mismo criterio que Composición/Sectores -- solo tiene
+    // sentido para "Total Agro", nunca para una actividad puntual, porque
+    // los otros países no están desglosados por actividad, solo el total
+    // agro de cada uno. Pedido explícito de Ciro, Nov-2026.
+    const seccionIntl = document.getElementById('saldos-internacional');
+    const navLinkIntl = document.querySelector('#saldosNav a[href="#saldos-internacional"]');
+    if(act.esTotalAgro){
+      if(seccionIntl) seccionIntl.style.display = '';
+      if(navLinkIntl) navLinkIntl.style.display = '';
+      renderInternacionalChart();
+    } else {
+      if(seccionIntl) seccionIntl.style.display = 'none';
+      if(navLinkIntl) navLinkIntl.style.display = 'none';
+      if(intlChart){ intlChart.destroy(); intlChart = null; }
     }
 
     renderTiles(act);
@@ -1644,6 +1694,7 @@
   }
 
   let composicionChart;
+  let intlChart;
   const composicionSlider = document.getElementById('composicionPeriodoSlider');
   const composicionFill = document.getElementById('composicionPeriodoFill');
   const composicionPeriodoLabel = document.getElementById('composicionPeriodoLabel');
@@ -1734,6 +1785,110 @@
           + '<td class="num mono">'+fmtMillones(r.valor, meta.prefix)+'</td>'
           + '<td class="num mono">'+fmtPct.format(pct)+'%</td></tr>';
       }).join('');
+    }
+  }
+
+  // Comparación internacional: Crédito bancario al agro / PBI (%), Argentina
+  // contra 5 países (planilla de elaboración propia que trajo Ciro, Nov-2026
+  // -- ver data/internacional.json, generado una sola vez a partir de esa
+  // planilla + INDEC/BCRA para la serie de Argentina). Solo se muestra para
+  // "Total Agro" (ver renderSaldosView): no hay desglose por actividad para
+  // los otros 5 países, así que compararlos contra una actividad puntual de
+  // Argentina no tendría sentido.
+  // Colores: mismos 6 matices categóricos ya validados por la skill de
+  // dataviz para "Composición del crédito total" (ver --sector-* en
+  // styles.css), en el MISMO orden consecutivo ya chequeado (industria ->
+  // comercio -> agro -> construccion -> personas -> servicios) -- no se
+  // reordena para no tener que revalidar. Argentina usa "agro" (el matiz
+  // temático, además queda en el medio de la secuencia) y se destaca por
+  // trazo más grueso y quedando dibujada arriba del resto, no por el color.
+  function internacionalColorFor(pais){
+    return getComputedStyle(document.documentElement).getPropertyValue(pais.cssVar).trim();
+  }
+  function renderInternacionalChart(){
+    const canvas = document.getElementById('internacionalChart');
+    if(!canvas || !DATA.internacional) return;
+    const intl = DATA.internacional;
+    const intlPeriodos = intl.periodos;
+    // El rango de períodos de internacional.json es el mismo PERIODOS de
+    // siempre (misma fuente, mismos 46 trimestres), así que se puede usar
+    // directamente state.rangeStart/rangeEnd sin tener que buscar el índice
+    // correspondiente -- pero se valida el largo igual, por las dudas.
+    const startIdx = intlPeriodos.length===PERIODOS.length ? state.rangeStart : 0;
+    const endIdx = intlPeriodos.length===PERIODOS.length ? state.rangeEnd : intlPeriodos.length-1;
+    const labels = intlPeriodos.slice(startIdx, endIdx+1).map(p=>PLABEL[p] || String(p));
+    const fmtPct2 = new Intl.NumberFormat('es-AR', {maximumFractionDigits:2, minimumFractionDigits:2});
+
+    const datasets = intl.paises.map(pais=>{
+      const color = internacionalColorFor(pais);
+      const data = (intl.series[pais.id] || []).slice(startIdx, endIdx+1);
+      return {
+        label: pais.nombre,
+        data,
+        borderColor: color, backgroundColor: color,
+        borderWidth: pais.enfasis ? 3 : 1.75,
+        pointRadius: pais.enfasis ? 2.5 : 1.5,
+        pointHoverRadius: 5,
+        tension: .2, spanGaps: false,
+        order: pais.enfasis ? 0 : 1, // dibuja a Argentina arriba del resto
+      };
+    });
+
+    const styles = getComputedStyle(document.documentElement);
+    const textColor = styles.getPropertyValue('--text-muted').trim();
+    const gridColor = styles.getPropertyValue('--border').trim();
+
+    const ctx = canvas.getContext('2d');
+    if(intlChart) intlChart.destroy();
+    intlChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label:(c)=> c.dataset.label + ': ' + (c.raw!=null ? fmtPct2.format(c.raw)+'%' : 'sin dato') } },
+        },
+        scales: {
+          x: { grid:{display:false}, ticks:{ color:textColor, font:{size:11}, maxRotation:0, autoSkip:true } },
+          y: { grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:11}, callback:(v)=> fmtPct2.format(v)+'%' }, beginAtZero:true },
+        },
+      },
+    });
+
+    const legendEl = document.getElementById('internacionalLegend');
+    if(legendEl){
+      legendEl.innerHTML = intl.paises.map((pais,i)=>
+        '<span class="toggle" data-idx="'+i+'"><i style="background:'+internacionalColorFor(pais)+'"></i>'+pais.nombre+'</span>'
+      ).join('');
+      legendEl.querySelectorAll('.toggle').forEach(function(el){
+        el.onclick = function(){
+          const idx = Number(el.dataset.idx);
+          const visible = intlChart.isDatasetVisible(idx);
+          intlChart.setDatasetVisibility(idx, !visible);
+          intlChart.update();
+          el.classList.toggle('off', visible);
+        };
+      });
+    }
+
+    // Último valor de cada país (para la tabla debajo del gráfico): toma el
+    // extremo derecho de la VENTANA elegida (mismo criterio que el resto de
+    // las tarjetas "del período actual" en este archivo), no siempre el
+    // último trimestre de toda la serie.
+    const bodyEl = document.getElementById('internacionalBody');
+    if(bodyEl){
+      const rows = intl.paises.map(pais=>{
+        const data = (intl.series[pais.id] || []).slice(startIdx, endIdx+1);
+        let lastVal = null;
+        for(let i=data.length-1; i>=0; i--){ if(data[i]!=null){ lastVal = data[i]; break; } }
+        return { pais, lastVal };
+      }).sort((a,b)=> (b.lastVal||0) - (a.lastVal||0));
+      bodyEl.innerHTML = rows.map(r=>
+        '<tr><td><span class="swatch" style="background:'+internacionalColorFor(r.pais)+'"></span></td>'
+        + '<td class="prov">'+r.pais.nombre+(r.pais.enfasis?' <span class="rank" style="width:auto;padding:0 6px;">AR</span>':'')+'</td>'
+        + '<td class="num">'+(r.lastVal!=null ? fmtPct2.format(r.lastVal)+'%' : '—')+'</td></tr>'
+      ).join('');
     }
   }
 

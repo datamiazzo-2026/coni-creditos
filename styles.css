@@ -190,6 +190,14 @@
     z-index:30;
   }
   .seg-tooltip.visible{opacity:1; visibility:visible;}
+  /* Usado en las tarjetas (ver tileSaldoProducto en app.js): position:fixed
+     en vez del absolute de arriba, porque #tiles tiene overflow:hidden (para
+     los bordes redondeados de la grilla) y recortaría un tooltip absolute
+     antes de que se viera. left/top los pone JS directamente en px de
+     viewport (wireInfoTooltip -> positionTooltip), no el --tooltip-left de
+     acá arriba, que asume un padre position:relative (el .seg-item de los
+     demás usos). */
+  .seg-tooltip.tile-tooltip{position:fixed; top:0; left:0;}
   .seg-tooltip b{display:block; margin-bottom:3px; color:var(--text);}
   .seg-tooltip::after{
     content:''; position:absolute; bottom:100%; left:var(--arrow-left, 50%); transform:translateX(-50%) rotate(45deg);
