@@ -293,10 +293,21 @@
     text-transform:uppercase; padding:0 10px 8px; border-bottom:1px solid var(--border);
   }
   thead th.num{text-align:right;}
-  tbody td{padding:9px 10px; border-bottom:1px solid var(--border);}
+  /* vertical-align:middle (el default de <td> es "baseline"): centra el
+     contenido de cada celda contra la altura real de la fila. */
+  tbody td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
   td.num{text-align:right; font-weight:600;}
-  td.prov{font-weight:600; display:flex; align-items:center; gap:8px;}
+  /* Ojo: NO poner display:flex acá (se había puesto en algún momento, sin
+     uso real -- .prov siempre tiene un solo nodo de texto, nunca más de
+     un hijo). display:flex saca a la celda del algoritmo normal de tabla:
+     deja de estirarse a la altura real de la fila (la definen las otras
+     celdas de al lado, p.ej. la del cuadradito de color), así que su
+     borde inferior quedaba más arriba que el del resto de la fila --
+     la tabla se veía con las líneas divisorias "escalonadas" en vez de
+     derechas, sobre todo en filas donde el nombre del instrumento ocupa
+     dos líneas (ej. "Préstamos con convenio para compra de insumos"). */
+  td.prov{font-weight:600;}
   .rank{
     width:20px; height:20px; border-radius:6px; background:var(--surface-2); border:1px solid var(--border);
     display:inline-flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:700; color:var(--text-faint); flex-shrink:0;
