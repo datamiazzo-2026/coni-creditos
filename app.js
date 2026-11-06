@@ -2146,11 +2146,16 @@
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
-            return ctx.dataset.label + ': ' + ctx.formattedValue + (ctx.chart.$mode==='usd' ? ' M' : '%');
+            // Miles separados con punto (es-AR): fmtInt ya se usa para esto
+            // en el resto del tablero (ver línea ~14). ctx.formattedValue no
+            // alcanza acá porque Chart.js lo arma con el locale del
+            // navegador, no con es-AR, así que en modo US$ millones podía
+            // mostrarse "5714" en vez de "5.714".
+            return ctx.dataset.label + ': ' + (ctx.chart.$mode==='usd' ? fmtInt.format(ctx.parsed.y) + ' M' : ctx.formattedValue + '%');
           } } } },
           scales: {
             x: { stacked:true, grid:{display:false}, ticks:{color:'#5C6B65', font:{size:11.5, weight:600}} },
-            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}} }
+            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}, callback:function(v){ return fmtInt.format(v); }} }
           }
         }
       });
@@ -2201,11 +2206,12 @@
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
-            return ctx.dataset.label + ': ' + ctx.formattedValue + (ctx.chart.$mode==='usd' ? ' M' : '%');
+            // Mismo fix de separador de miles que en el chart de Panorama (ver comentario ahí arriba).
+            return ctx.dataset.label + ': ' + (ctx.chart.$mode==='usd' ? fmtInt.format(ctx.parsed.y) + ' M' : ctx.formattedValue + '%');
           } } } },
           scales: {
             x: { stacked:true, grid:{display:false}, ticks:{color:'#5C6B65', font:{size:11.5, weight:600}} },
-            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}} }
+            y: { stacked:true, beginAtZero:true, grid:{color:'#EEF3EF'}, ticks:{color:'#8A9A95', font:{size:11}, callback:function(v){ return fmtInt.format(v); }} }
           }
         }
       });
